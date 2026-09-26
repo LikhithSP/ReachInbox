@@ -3,6 +3,9 @@ import cors from 'cors';
 import session from 'express-session';
 import passport from 'passport';
 import authRouter from './routes/auth';
+import campaignsRouter from './routes/campaigns';
+import emailsRouter from './routes/emails';
+import sendersRouter from './routes/senders';
 import { requestIdMiddleware, errorHandlerMiddleware } from './middleware/errorHandler';
 
 const app = express();
@@ -42,6 +45,9 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/campaigns', campaignsRouter);
+app.use('/api/v1/emails', emailsRouter);
+app.use('/api/v1/senders', sendersRouter);
 
 app.use(errorHandlerMiddleware);
 
