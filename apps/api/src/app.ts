@@ -7,8 +7,21 @@ import campaignsRouter from './routes/campaigns';
 import emailsRouter from './routes/emails';
 import sendersRouter from './routes/senders';
 import { requestIdMiddleware, errorHandlerMiddleware } from './middleware/errorHandler';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
+import { emailQueue } from './queues/emailQueue';
 
 const app = express();
+
+// Bull Board UI for queue monitoring and operational observability (RI-050)
+const serverAdapter = new ExpressAdapter();
+serverAdapter.setBasePath('/admin/queues');
+createBullBoard({
+  queues: [new BullMQAdapter(emailQueue)],
+  serverAdapter,
+});
+app.use('/admin/queues', serverAdapter.getRouter());
 
 app.use(requestIdMiddleware);
 app.use(
