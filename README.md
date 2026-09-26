@@ -50,7 +50,7 @@ Designed around **persistent asynchronous job processing**, ensuring scheduled e
 - [x] Environment configuration (`.env.example`)
 - [x] Root & package TypeScript configuration
 - [x] Database Schema (Prisma for MySQL: User, Sender, Campaign, EmailJob, SlackConnection)
-- [ ] Authentication & User Session (Google OAuth & Mock Auth for Dev)
+- [x] Authentication & User Session (Google OAuth, Session Cookies, and Dev Login)
 - [ ] Campaign & Email Job API
 - [ ] BullMQ Scheduling & Worker Engine
 - [ ] Concurrency, Delays, & Hourly Rate Limiting
