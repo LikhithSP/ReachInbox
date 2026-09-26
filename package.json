@@ -1,0 +1,30 @@
+{
+  "name": "reachinbox-scheduler-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ReachInbox Email Scheduler Monorepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=@reachinbox/api",
+    "dev:worker": "npm run worker --workspace=@reachinbox/api",
+    "dev:web": "npm run dev --workspace=@reachinbox/web",
+    "build:api": "npm run build --workspace=@reachinbox/api",
+    "build:web": "npm run build --workspace=@reachinbox/web",
+    "build:shared": "npm run build --workspace=@reachinbox/shared",
+    "build": "npm run build:shared && npm run build:api && npm run build:web",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npx prisma generate",
+    "db:migrate": "npx prisma migrate dev",
+    "db:studio": "npx prisma studio"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "prisma": "^5.10.0",
+    "typescript": "^5.3.3"
+  }
+}
