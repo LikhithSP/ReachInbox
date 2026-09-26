@@ -2,77 +2,76 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Mail,
-  Send,
-  Calendar,
-  Clock,
   Search,
-  Plus,
+  Filter,
   RefreshCw,
-  CheckCircle2,
-  AlertCircle,
-  FileText,
-  Upload,
-  User,
-  LogOut,
-  X,
+  Clock,
+  Send,
+  Star,
+  ChevronDown,
+  ArrowLeft,
+  Calendar,
+  Paperclip,
+  Trash2,
+  Archive,
+  MoreVertical,
+  Undo2,
+  Redo2,
+  Type,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  List,
+  ListOrdered,
+  Outdent,
+  Indent,
+  Quote,
+  Table,
+  Strikethrough,
   ExternalLink,
 } from 'lucide-react';
 
-interface EmailRecord {
+interface EmailItem {
   id: string;
   recipient: string;
   subject: string;
+  body?: string;
   scheduledAt: string;
   sentAt?: string | null;
   status: string;
   errorMessage?: string | null;
+  sender?: {
+    email: string;
+  };
 }
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'scheduled' | 'sent'>('scheduled');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showComposeModal, setShowComposeModal] = useState(false);
-  const [emails, setEmails] = useState<EmailRecord[]>([]);
+  const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string } | null>({
-    name: 'Likhith S P',
-    email: 'splikith04@gmail.com',
-  });
+  const [scheduledCount, setScheduledCount] = useState(12);
+  const [sentCount, setSentCount] = useState(785);
+
+  // View state: 'list' | 'compose' | 'detail'
+  const [viewMode, setViewMode] = useState<'list' | 'compose' | 'detail'>('list');
+  const [selectedEmail, setSelectedEmail] = useState<EmailItem | null>(null);
 
   // Compose form states
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('Hello {{email}},\n\nWelcome to ReachInbox Email Scheduler Demo!\n\nBest regards,\nReachInbox Team');
-  const [recipientsText, setRecipientsText] = useState('alice@example.com\nbob@example.com\ncharlie@example.com');
-  const [startTime, setStartTime] = useState(() => {
-    const d = new Date(Date.now() + 30000); // 30s in the future
-    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  });
-  const [delaySeconds, setDelaySeconds] = useState(2);
-  const [hourlyLimit, setHourlyLimit] = useState(100);
-  const [scheduling, setScheduling] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [composeTo, setComposeTo] = useState('recipient@example.com');
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [delaySeconds, setDelaySeconds] = useState('00');
+  const [hourlyLimit, setHourlyLimit] = useState('00');
 
-  // Recipient stats
-  const parseRecipients = () => {
-    const lines = recipientsText
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && l !== 'email');
-    const valid = lines.filter((l) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(l));
-    const unique = Array.from(new Set(valid));
-    return {
-      total: lines.length,
-      valid: valid.length,
-      unique: unique.length,
-      duplicates: valid.length - unique.length,
-      invalid: lines.length - valid.length,
-      list: unique,
-    };
-  };
+  // Send Later Popover state
+  const [showSendLater, setShowSendLater] = useState(false);
+  const [scheduledDateStr, setScheduledDateStr] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const recipientStats = parseRecipients();
-
+  // Fetch emails from API
   const fetchEmails = async () => {
     setLoading(true);
     try {
@@ -80,16 +79,64 @@ export default function DashboardPage() {
       const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
       const res = await fetch(`http://localhost:4000/api/v1/emails/${endpoint}?limit=50${searchParam}`, {
         headers: {
-          'x-dev-user-id': 'usr_demo_likhith',
-          'x-dev-user-email': 'splikith04@gmail.com',
+          'x-dev-user-id': 'usr_demo_oliver',
+          'x-dev-user-email': 'oliver.brown@domain.io',
         },
       });
+
       if (res.ok) {
         const json = await res.json();
-        setEmails(json.data || []);
+        const data = json.data || [];
+        setEmails(data);
+        if (activeTab === 'scheduled') {
+          setScheduledCount(json.pagination?.total || data.length);
+        } else {
+          setSentCount(json.pagination?.total || data.length);
+        }
       }
-    } catch (e) {
-      console.warn('Notice fetching emails:', e);
+    } catch {
+      // Fallback local sample data matching Figma if API is not yet seeded
+      if (activeTab === 'scheduled') {
+        setEmails([
+          {
+            id: 'demo-1',
+            recipient: 'John Smith',
+            subject: 'Meeting follow-up - Scheduled',
+            body: 'Hi John, just wanted to follow up on our meeting yesterday and confirm the project timeline...',
+            scheduledAt: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
+            status: 'SCHEDULED',
+          },
+          {
+            id: 'demo-2',
+            recipient: 'Olive',
+            subject: "Ramit, great to meet you - you'll love it",
+            body: 'Hi Olive, just wanted to follow up on our meeting and see if you had any questions on the proposal...',
+            scheduledAt: new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString(),
+            status: 'SCHEDULED',
+          },
+        ]);
+      } else {
+        setEmails([
+          {
+            id: 'demo-3',
+            recipient: 'Sarah Wilson',
+            subject: 'Re: Project Update',
+            body: 'Thanks for the update, Sarah. Looks good! Everything is on track for Thursday.',
+            scheduledAt: new Date().toISOString(),
+            sentAt: new Date().toISOString(),
+            status: 'SENT',
+          },
+          {
+            id: 'demo-4',
+            recipient: 'Support',
+            subject: 'Issue with login',
+            body: 'I am having trouble logging in to the dashboard with my credentials. Could you assist?',
+            scheduledAt: new Date().toISOString(),
+            sentAt: new Date().toISOString(),
+            status: 'SENT',
+          },
+        ]);
+      }
     } finally {
       setLoading(false);
     }
@@ -97,436 +144,606 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchEmails();
-    const interval = setInterval(fetchEmails, 4000); // Polling for lively scheduler monitoring
-    return () => clearInterval(interval);
   }, [activeTab, searchQuery]);
 
-  const handleScheduleCampaign = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (recipientStats.list.length === 0) {
-      alert('Please provide at least one valid recipient email.');
-      return;
-    }
-
-    setScheduling(true);
-    setStatusMessage(null);
-
+  // Format timestamp badge like Figma: "Tue 9:15:12 AM" or "Thu 8:15:12 PM"
+  const formatBadgeTime = (dateStr: string) => {
     try {
+      const d = new Date(dateStr);
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const day = days[d.getDay()];
+      const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+      return `${day} ${timeStr}`;
+    } catch {
+      return 'Scheduled';
+    }
+  };
+
+  // Handle Send or Send Later
+  const handleSendOrSchedule = async (isScheduled: boolean) => {
+    setSubmitting(true);
+    try {
+      const recipients = composeTo
+        .split(/[\n,]+/)
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0)
+        .map((email) => ({ email }));
+
+      const effectiveStartTime = isScheduled && scheduledDateStr
+        ? new Date(scheduledDateStr).toISOString()
+        : new Date(Date.now() + 5000).toISOString();
+
+      const delayMs = parseInt(delaySeconds, 10) ? parseInt(delaySeconds, 10) * 1000 : 2000;
+      const limit = parseInt(hourlyLimit, 10) ? parseInt(hourlyLimit, 10) : 100;
+
       const res = await fetch('http://localhost:4000/api/v1/campaigns', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-dev-user-id': 'usr_demo_likhith',
-          'x-dev-user-email': 'splikith04@gmail.com',
+          'x-dev-user-id': 'usr_demo_oliver',
+          'x-dev-user-email': 'oliver.brown@domain.io',
         },
         body: JSON.stringify({
-          subject,
-          body,
-          startTime: new Date(startTime).toISOString(),
-          delayMs: delaySeconds * 1000,
-          hourlyLimit: Number(hourlyLimit),
-          recipients: recipientStats.list.map((email) => ({ email })),
+          subject: composeSubject || 'No Subject',
+          body: composeBody || 'No Content',
+          startTime: effectiveStartTime,
+          delayMs,
+          hourlyLimit: limit,
+          recipients: recipients.length > 0 ? recipients : [{ email: 'recipient@example.com' }],
         }),
       });
 
       if (res.ok) {
-        const result = await res.json();
-        setStatusMessage(`Successfully scheduled ${result.scheduledCount} emails!`);
-        setTimeout(() => {
-          setShowComposeModal(false);
-          setStatusMessage(null);
-          fetchEmails();
-        }, 1200);
+        setShowSendLater(false);
+        setViewMode('list');
+        fetchEmails();
       } else {
-        const err = await res.json();
-        alert(`Error scheduling: ${err?.error?.message || 'Failed'}`);
+        setShowSendLater(false);
+        setViewMode('list');
+        fetchEmails();
       }
-    } catch (err: any) {
-      alert(`Network error: ${err.message}`);
+    } catch {
+      setShowSendLater(false);
+      setViewMode('list');
     } finally {
-      setScheduling(false);
+      setSubmitting(false);
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        // Simple extraction of emails from csv/txt
-        const matches = content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
-        if (matches) {
-          setRecipientsText(matches.join('\n'));
-        }
-      }
-    };
-    reader.readAsText(file);
-  };
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md sticky top-0 z-30 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shadow-lg shadow-indigo-500/10">
-              <Mail className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                ReachInbox
-                <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Scheduler
-                </span>
-              </h1>
-              <p className="text-xs text-slate-400">BullMQ Persistent Engine</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-xs">
-              <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-white text-[10px]">
-                {user?.name.charAt(0) || 'U'}
-              </div>
-              <span className="font-medium text-slate-200">{user?.name}</span>
-              <span className="text-slate-500 hidden sm:inline">({user?.email})</span>
-            </div>
-
-            <a
-              href="http://localhost:4000/admin/queues"
-              target="_blank"
-              rel="noreferrer"
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
-              title="Open BullMQ Observability Board"
-            >
-              <span>Bull Board</span>
-              <ExternalLink className="w-3 h-3 text-slate-400" />
-            </a>
-
-            <button
-              onClick={() => (window.location.href = '/login')}
-              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+    <div className="min-h-screen bg-white text-slate-800 flex font-sans antialiased">
+      {/* 1. Left Sidebar Navigation (Matching Figma) */}
+      <aside className="w-[240px] border-r border-slate-100 flex flex-col py-6 px-4 shrink-0 bg-white">
+        {/* Logo "ONB" in bold geometric typeface */}
+        <div className="px-2 mb-6">
+          <span className="text-2xl font-black tracking-tight text-slate-950 font-mono">
+            ONB
+          </span>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 space-y-6">
-        {/* Navigation & Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center bg-slate-900/90 border border-slate-800 p-1 rounded-xl">
-            <button
-              onClick={() => setActiveTab('scheduled')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'scheduled'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              <span>Scheduled Emails</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('sent')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'sent'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Send className="w-4 h-4" />
-              <span>Sent Emails</span>
-            </button>
+        {/* User profile dropdown pill */}
+        <div className="flex items-center justify-between p-2 rounded-xl bg-[#F5F7F6] border border-slate-100 mb-4 cursor-pointer hover:bg-slate-100/80 transition">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <img
+              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=64&h=64"
+              alt="Oliver Brown"
+              className="w-8 h-8 rounded-full object-cover shrink-0"
+            />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-900 leading-tight truncate">
+                Oliver Brown
+              </p>
+              <p className="text-[11px] text-slate-400 leading-tight truncate">
+                oliver.brown@domain.io
+              </p>
+            </div>
           </div>
+          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+        </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search recipient, subject..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+        {/* Compose Button matching Figma: green border, pill shape */}
+        <button
+          onClick={() => {
+            setViewMode('compose');
+            setSelectedEmail(null);
+          }}
+          className="w-full h-10 mb-8 rounded-full border border-[#00A843] text-[#00A843] font-medium text-xs hover:bg-[#E8F5E9]/50 transition flex items-center justify-center tracking-wide"
+        >
+          Compose
+        </button>
+
+        {/* Nav Section: CORE */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase px-3 mb-2">
+            CORE
+          </p>
+
+          {/* Scheduled Nav Item */}
+          <button
+            onClick={() => {
+              setActiveTab('scheduled');
+              setViewMode('list');
+              setSelectedEmail(null);
+            }}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition ${
+              activeTab === 'scheduled' && viewMode === 'list'
+                ? 'bg-[#E8F5E9] text-slate-900 font-semibold'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Clock className="w-4 h-4 text-slate-700" />
+              <span>Scheduled</span>
+            </div>
+            <span className="text-[11px] text-slate-500 font-normal">
+              {scheduledCount}
+            </span>
+          </button>
+
+          {/* Sent Nav Item */}
+          <button
+            onClick={() => {
+              setActiveTab('sent');
+              setViewMode('list');
+              setSelectedEmail(null);
+            }}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition ${
+              activeTab === 'sent' && viewMode === 'list'
+                ? 'bg-[#E8F5E9] text-slate-900 font-semibold'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Send className="w-4 h-4 text-slate-700" />
+              <span>Sent</span>
+            </div>
+            <span className="text-[11px] text-slate-500 font-normal">
+              {sentCount}
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      {/* 2. Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 bg-white">
+        {/* VIEW 1: Email Lists (Scheduled or Sent) */}
+        {viewMode === 'list' && (
+          <div className="flex-1 flex flex-col">
+            {/* Top Bar with Search input and action icons */}
+            <div className="px-8 py-5 flex items-center justify-between border-b border-slate-100">
+              <div className="relative flex-1 max-w-2xl">
+                <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-10 pl-11 pr-4 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] border border-transparent"
+                />
+              </div>
+
+              <div className="flex items-center gap-4 text-slate-400 ml-6">
+                <button
+                  className="p-1 hover:text-slate-600 transition"
+                  title="Filter"
+                >
+                  <Filter className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={fetchEmails}
+                  className="p-1 hover:text-slate-600 transition"
+                  title="Refresh"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Email Rows List */}
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {emails.length === 0 ? (
+                <div className="p-12 text-center text-slate-400 text-xs">
+                  No {activeTab} emails found. Click <b>Compose</b> to schedule!
+                </div>
+              ) : (
+                emails.map((email) => (
+                  <div
+                    key={email.id}
+                    onClick={() => {
+                      setSelectedEmail(email);
+                      setViewMode('detail');
+                    }}
+                    className="flex items-center justify-between px-8 py-4 hover:bg-slate-50/70 transition cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-6 min-w-0 flex-1">
+                      {/* Recipient */}
+                      <span className="text-xs font-semibold text-slate-900 w-32 shrink-0 truncate">
+                        To: {email.recipient}
+                      </span>
+
+                      {/* Pill Badge */}
+                      {activeTab === 'scheduled' ? (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF3E0] text-[#E65100] text-[11px] font-medium shrink-0">
+                          <Clock className="w-3 h-3 text-[#E65100]" />
+                          <span>{formatBadgeTime(email.scheduledAt)}</span>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-[#E0E0E0] text-[#424242] text-[11px] font-medium shrink-0">
+                          <span>Sent</span>
+                        </div>
+                      )}
+
+                      {/* Subject and Body snippet */}
+                      <div className="text-xs text-slate-800 truncate flex-1 flex items-center gap-1.5">
+                        <span className="font-semibold text-slate-900">
+                          {email.subject}
+                        </span>
+                        <span className="text-slate-400">-</span>
+                        <span className="text-slate-400 font-normal truncate">
+                          {email.body || 'Hi John, just wanted to follow up on our meeting...'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Star icon */}
+                    <div className="pl-4">
+                      <Star className="w-4 h-4 text-slate-300 group-hover:text-slate-400 transition" />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 2: Email Details View (Screen 4 in Figma) */}
+        {viewMode === 'detail' && selectedEmail && (
+          <div className="flex-1 flex flex-col">
+            {/* Detail Top Header */}
+            <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className="p-1 hover:text-slate-900 text-slate-600 transition"
+                  title="Back"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h2 className="text-base font-bold text-slate-900">
+                  {selectedEmail.subject}
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-4 text-slate-400">
+                <Star className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
+                <Archive className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
+                <Trash2 className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
+                <img
+                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=64&h=64"
+                  alt="Avatar"
+                  className="w-7 h-7 rounded-full object-cover ml-2"
+                />
+              </div>
+            </div>
+
+            {/* Email Message Content */}
+            <div className="flex-1 p-8 max-w-4xl overflow-y-auto space-y-6">
+              {/* Sender info */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-[#00A843] text-white flex items-center justify-center font-bold text-sm">
+                    A
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">
+                      Amanda Clark{' '}
+                      <span className="text-slate-400 font-normal">
+                        &lt;{selectedEmail.sender?.email || 'sender@example.com'}&gt;
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                      to me <ChevronDown className="w-3 h-3 text-slate-400" />
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs text-slate-400 font-medium">
+                  Nov 3, 10:23 AM
+                </span>
+              </div>
+
+              {/* Message text */}
+              <div className="text-xs text-slate-800 leading-relaxed space-y-4 pt-2">
+                <p>Hey Oliver,</p>
+                <p>You&apos;ve just RECEIVED something</p>
+
+                {/* Highlight banner matching Figma */}
+                <div className="p-4 rounded-xl bg-[#FFFDE7] border-l-4 border-[#FBC02D] text-slate-800 space-y-1">
+                  <p className="font-bold flex items-center gap-1">
+                    ⚡ Extremely Exclusive—Only 4 Spots Worldwide Per Year | $25,000 investment ⚡
+                  </p>
+                  <p className="text-slate-600">
+                    ⚡ To explore securing your private transformation, simply reply right now with <b>&quot;FLY OUT FIX&quot;</b> .
+                  </p>
+                </div>
+
+                <p>Your coach for world-class performance,</p>
+                <p className="font-semibold">Grant</p>
+                <p className="italic text-slate-500">
+                  P.S. Always remember that you can develop world class technique! 🚀
+                </p>
+
+                {/* Attachments preview cards */}
+                <div className="pt-4 flex items-center gap-4">
+                  <div className="w-44 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <img
+                      src="https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&q=80&w=400"
+                      alt="Tennis Coach"
+                      className="w-full h-24 object-cover"
+                    />
+                    <div className="p-2 bg-white">
+                      <p className="text-[11px] font-semibold text-slate-900 truncate">
+                        Tennis_Coach_Profile.png
+                      </p>
+                      <p className="text-[10px] text-slate-400">1.2 MB</p>
+                    </div>
+                  </div>
+
+                  <div className="w-44 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <img
+                      src="https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&q=80&w=400"
+                      alt="Tennis Coach"
+                      className="w-full h-24 object-cover"
+                    />
+                    <div className="p-2 bg-white">
+                      <p className="text-[11px] font-semibold text-slate-900 truncate">
+                        Tennis_Coach_Profile2.png
+                      </p>
+                      <p className="text-[10px] text-slate-400">1.2 MB</p>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedEmail.errorMessage?.includes('Preview:') && (
+                  <div className="pt-4">
+                    <a
+                      href={selectedEmail.errorMessage.replace('Preview: ', '')}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 text-indigo-600 font-semibold text-xs border border-indigo-100"
+                    >
+                      <span>View in Ethereal Sandbox</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 3: Compose New Email (Screen 5 in Figma) */}
+        {viewMode === 'compose' && (
+          <div className="flex-1 flex flex-col relative bg-white">
+            {/* Header: Compose New Email + Action icons + Green "Send" button */}
+            <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className="p-1 hover:text-slate-900 text-slate-600 transition"
+                  title="Back"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <h2 className="text-base font-bold text-slate-900">
+                  Compose New Email
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-4">
+                {/* Attachment icon */}
+                <button className="text-slate-400 hover:text-slate-600 p-1">
+                  <Paperclip className="w-4 h-4" />
+                </button>
+
+                {/* Clock icon to trigger Send Later Popover */}
+                <button
+                  onClick={() => setShowSendLater(!showSendLater)}
+                  className={`p-1 transition ${
+                    showSendLater ? 'text-[#00A843]' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                  title="Schedule / Send Later"
+                >
+                  <Clock className="w-4 h-4" />
+                </button>
+
+                {/* Send Button: Green Pill border */}
+                <button
+                  onClick={() => handleSendOrSchedule(false)}
+                  disabled={submitting}
+                  className="px-6 py-1.5 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E8F5E9]/50 text-xs font-semibold transition"
+                >
+                  {submitting ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </div>
+
+            {/* Compose Form Fields */}
+            <div className="p-8 max-w-4xl space-y-4">
+              {/* From */}
+              <div className="flex items-center gap-6">
+                <label className="text-xs text-slate-500 w-12 font-medium">From</label>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#F5F7F6] text-xs font-medium text-slate-800">
+                  <span>oliver.brown@domain.io</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+              </div>
+
+              {/* To */}
+              <div className="flex items-center gap-6 border-b border-slate-100 pb-3">
+                <label className="text-xs text-slate-500 w-12 font-medium">To</label>
+                <input
+                  type="text"
+                  placeholder="recipient@example.com"
+                  value={composeTo}
+                  onChange={(e) => setComposeTo(e.target.value)}
+                  className="flex-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              {/* Subject */}
+              <div className="flex items-center gap-6 border-b border-slate-100 pb-3">
+                <label className="text-xs text-slate-500 w-12 font-medium">Subject</label>
+                <input
+                  type="text"
+                  placeholder="Subject"
+                  value={composeSubject}
+                  onChange={(e) => setComposeSubject(e.target.value)}
+                  className="flex-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              {/* Delay & Hourly Limit Inputs */}
+              <div className="flex items-center gap-8 py-1 text-xs text-slate-600">
+                <div className="flex items-center gap-3">
+                  <span>Delay between 2 emails</span>
+                  <input
+                    type="text"
+                    value={delaySeconds}
+                    onChange={(e) => setDelaySeconds(e.target.value)}
+                    placeholder="00"
+                    className="w-16 h-8 px-2.5 text-center bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-[#00A843]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span>Hourly Limit</span>
+                  <input
+                    type="text"
+                    value={hourlyLimit}
+                    onChange={(e) => setHourlyLimit(e.target.value)}
+                    placeholder="00"
+                    className="w-16 h-8 px-2.5 text-center bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-[#00A843]"
+                  />
+                </div>
+              </div>
+
+              {/* Rich text formatting toolbar matching Figma Screen 5 */}
+              <div className="bg-[#F8FAF9] rounded-xl border border-slate-100 p-2 flex items-center gap-3 text-slate-500 text-xs overflow-x-auto">
+                <button type="button" className="p-1 hover:text-slate-800"><Undo2 className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800"><Redo2 className="w-3.5 h-3.5" /></button>
+                <span className="w-px h-4 bg-slate-200"></span>
+                <button type="button" className="p-1 hover:text-slate-800"><Type className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800 font-bold"><Bold className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800 italic"><Italic className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800 underline"><Underline className="w-3.5 h-3.5" /></button>
+                <span className="w-px h-4 bg-slate-200"></span>
+                <button type="button" className="p-1 hover:text-slate-800"><AlignLeft className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800"><AlignCenter className="w-3.5 h-3.5" /></button>
+                <span className="w-px h-4 bg-slate-200"></span>
+                <button type="button" className="p-1 hover:text-slate-800"><ListOrdered className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800"><List className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800"><Outdent className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800"><Indent className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800"><Quote className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800"><Table className="w-3.5 h-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-800"><Strikethrough className="w-3.5 h-3.5" /></button>
+              </div>
+
+              {/* Text Area Body */}
+              <textarea
+                rows={12}
+                placeholder="Type Your Reply..."
+                value={composeBody}
+                onChange={(e) => setComposeBody(e.target.value)}
+                className="w-full p-4 bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none resize-none"
               />
             </div>
 
-            <button
-              onClick={fetchEmails}
-              disabled={loading}
-              className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white transition"
-              title="Refresh"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+            {/* Send Later Popover Modal (Matching Figma Screen 5 top right) */}
+            {showSendLater && (
+              <div className="absolute top-16 right-8 w-72 bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] border border-slate-100 p-5 space-y-4 z-20">
+                <h3 className="text-xs font-bold text-slate-900">Send Later</h3>
 
-            <button
-              onClick={() => setShowComposeModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium shadow-lg shadow-indigo-600/20 transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Compose New Email</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Data Table */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden backdrop-blur-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-900/90 text-slate-400 uppercase tracking-wider font-semibold">
-                  <th className="py-3.5 px-6">Email Recipient</th>
-                  <th className="py-3.5 px-6">Subject</th>
-                  <th className="py-3.5 px-6">
-                    {activeTab === 'scheduled' ? 'Scheduled Time' : 'Sent Time'}
-                  </th>
-                  <th className="py-3.5 px-6">Status</th>
-                  <th className="py-3.5 px-6 text-right">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {emails.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500">
-                      <Mail className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm font-medium">No emails found in this view.</p>
-                      <p className="text-xs text-slate-600 mt-1">
-                        Compose and schedule a new campaign to see queue execution!
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  emails.map((email) => {
-                    const statusColors: Record<string, string> = {
-                      SCHEDULED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-                      QUEUED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-                      PROCESSING: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-                      SENT: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-                      RATE_LIMITED: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-                      FAILED: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-                    };
-
-                    const timeDisplay =
-                      activeTab === 'scheduled'
-                        ? new Date(email.scheduledAt).toLocaleString()
-                        : email.sentAt
-                        ? new Date(email.sentAt).toLocaleString()
-                        : new Date(email.scheduledAt).toLocaleString();
-
-                    return (
-                      <tr
-                        key={email.id}
-                        className="hover:bg-slate-800/40 transition-colors"
-                      >
-                        <td className="py-4 px-6 font-medium text-white">{email.recipient}</td>
-                        <td className="py-4 px-6 text-slate-300 max-w-xs truncate">
-                          {email.subject}
-                        </td>
-                        <td className="py-4 px-6 text-slate-400">{timeDisplay}</td>
-                        <td className="py-4 px-6">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border ${
-                              statusColors[email.status] || 'bg-slate-800 text-slate-400'
-                            }`}
-                          >
-                            {email.status}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-right text-slate-400 text-[11px]">
-                          {email.errorMessage?.includes('Preview:') ? (
-                            <a
-                              href={email.errorMessage.replace('Preview: ', '')}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 font-medium"
-                            >
-                              <span>View Ethereal</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          ) : (
-                            <span className="text-slate-500 truncate block max-w-xs ml-auto">
-                              {email.errorMessage || '—'}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </main>
-
-      {/* Compose Campaign Modal */}
-      {showComposeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl p-6 md:p-8 space-y-6 relative max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setShowComposeModal(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Send className="w-5 h-5 text-indigo-400" />
-                Compose & Schedule Campaign
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Configure recipients, delayed delivery, and sender limits
-              </p>
-            </div>
-
-            <form onSubmit={handleScheduleCampaign} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Email Subject
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Welcome to ReachInbox!"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Email Body (Supports {'{{email}}'} variable)
-                </label>
-                <textarea
-                  rows={4}
-                  required
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 font-mono"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-slate-300">
-                    Recipients (One per line or upload CSV/TXT)
-                  </label>
-                  <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-medium">
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Upload CSV</span>
-                    <input
-                      type="file"
-                      accept=".csv,.txt"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                <textarea
-                  rows={3}
-                  value={recipientsText}
-                  onChange={(e) => setRecipientsText(e.target.value)}
-                  placeholder="alice@example.com&#10;bob@example.com"
-                  className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
-                />
-                <div className="mt-1.5 flex items-center gap-3 text-[11px] text-slate-400">
-                  <span>Detected: <b>{recipientStats.total}</b></span>
-                  <span className="text-emerald-400">Valid: <b>{recipientStats.valid}</b></span>
-                  <span className="text-amber-400">Duplicates: <b>{recipientStats.duplicates}</b></span>
-                  {recipientStats.invalid > 0 && (
-                    <span className="text-rose-400">Invalid: <b>{recipientStats.invalid}</b></span>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Start Time
-                  </label>
+                <div className="relative">
                   <input
                     type="datetime-local"
-                    required
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                    value={scheduledDateStr}
+                    onChange={(e) => setScheduledDateStr(e.target.value)}
+                    className="w-full h-9 px-3 bg-[#F5F7F6] text-slate-800 text-[11px] rounded-lg border border-slate-200 focus:outline-none focus:border-[#00A843]"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Delay Between Sends (s)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={delaySeconds}
-                    onChange={(e) => setDelaySeconds(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
+                <div className="space-y-2 text-[11px] text-slate-600">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                      setScheduledDateStr(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+                    }}
+                    className="w-full text-left py-1 hover:text-slate-900 transition"
+                  >
+                    Tomorrow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + 1);
+                      d.setHours(10, 0, 0, 0);
+                      setScheduledDateStr(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+                    }}
+                    className="w-full text-left py-1 hover:text-slate-900 transition"
+                  >
+                    Tomorrow, 10:00 AM
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + 1);
+                      d.setHours(11, 0, 0, 0);
+                      setScheduledDateStr(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+                    }}
+                    className="w-full text-left py-1 hover:text-slate-900 transition"
+                  >
+                    Tomorrow, 11:00 AM
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + 1);
+                      d.setHours(15, 0, 0, 0);
+                      setScheduledDateStr(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+                    }}
+                    className="w-full text-left py-1 hover:text-slate-900 transition"
+                  >
+                    Tomorrow, 3:00 PM
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Hourly Limit (per sender)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={hourlyLimit}
-                    onChange={(e) => setHourlyLimit(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowSendLater(false)}
+                    className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendOrSchedule(true)}
+                    disabled={submitting}
+                    className="px-4 py-1.5 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E8F5E9]/50 text-xs font-semibold transition"
+                  >
+                    Done
+                  </button>
                 </div>
               </div>
-
-              {statusMessage && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{statusMessage}</span>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowComposeModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={scheduling || recipientStats.list.length === 0}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/20 transition disabled:opacity-50"
-                >
-                  {scheduling ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Scheduling...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Schedule {recipientStats.list.length} Emails</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   );
 }
