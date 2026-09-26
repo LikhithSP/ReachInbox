@@ -4,6 +4,7 @@ import { prisma } from '../config/db';
 import { requireAuth } from '../middleware/auth';
 import { AppError } from '../utils/errors';
 import { v4 as uuidv4 } from 'uuid';
+import { SchedulerService } from '../services/scheduler.service';
 
 const router = Router();
 
@@ -141,6 +142,14 @@ router.post('/', requireAuth, async (req: Request, res: Response, next: NextFunc
         emailJobsCount: emailJobData.length,
       };
     });
+
+    // Dual persistence: Enqueue durable jobs to BullMQ asynchronously
+    try {
+      await SchedulerService.scheduleCampaign(created.campaign.id);
+    } catch (queueErr: any) {
+      console.warn('[Queue] Notice on enqueuing jobs to BullMQ:', queueErr.message);
+      // Jobs remain safely preserved in MySQL as SCHEDULED and will be picked up by reconciliation
+    }
 
     return res.status(201).json({
       id: created.campaign.id,
