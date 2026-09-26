@@ -49,7 +49,7 @@ Designed around **persistent asynchronous job processing**, ensuring scheduled e
 - [x] Docker Compose setup (MySQL 8, Redis 7, Elasticsearch 8.11)
 - [x] Environment configuration (`.env.example`)
 - [x] Root & package TypeScript configuration
-- [ ] Database Schema & Migrations (Prisma)
+- [x] Database Schema (Prisma for MySQL: User, Sender, Campaign, EmailJob, SlackConnection)
 - [ ] Authentication & User Session (Google OAuth & Mock Auth for Dev)
 - [ ] Campaign & Email Job API
 - [ ] BullMQ Scheduling & Worker Engine
