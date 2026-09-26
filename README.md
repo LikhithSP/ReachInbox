@@ -51,7 +51,7 @@ Designed around **persistent asynchronous job processing**, ensuring scheduled e
 - [x] Root & package TypeScript configuration
 - [x] Database Schema (Prisma for MySQL: User, Sender, Campaign, EmailJob, SlackConnection)
 - [x] Authentication & User Session (Google OAuth, Session Cookies, and Dev Login)
-- [ ] Campaign & Email Job API
+- [x] Campaign & Email Job API (Create Campaign, List, Scheduled Emails, Sent Emails, Senders)
 - [ ] BullMQ Scheduling & Worker Engine
 - [ ] Concurrency, Delays, & Hourly Rate Limiting
 - [ ] Slack OAuth & Alert Notifications
