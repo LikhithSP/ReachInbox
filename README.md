@@ -53,10 +53,10 @@ Designed around **persistent asynchronous job processing**, ensuring scheduled e
 - [x] Authentication & User Session (Google OAuth, Session Cookies, and Dev Login)
 - [x] Campaign & Email Job API (Create Campaign, List, Scheduled Emails, Sent Emails, Senders)
 - [x] BullMQ Delayed Scheduling & Startup Reconciliation (ADR-005)
-- [ ] Email Worker Engine & SMTP Delivery (Ethereal)
-- [ ] Concurrency, Delays, & Hourly Rate Limiting
-- [ ] Slack OAuth & Alert Notifications
-- [ ] Elasticsearch Email Indexing & Search
+- [x] Email Worker Engine & SMTP Delivery (Ethereal Nodemailer)
+- [x] Concurrency, Delays, Distributed Locking, & Hourly Rate Limiting (Atomic Redis counter)
+- [x] Slack Alerts Integration (Hourly rate-limit notification)
+- [x] Elasticsearch Email Job Indexing & Search Service
 - [ ] Dashboard Web Interface & Bull Board Queue Monitoring
 - [ ] Reliability & Recovery Testing Suite
 
