@@ -1,0 +1,123 @@
+import { Router, Request, Response } from 'express';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { requireAuth } from '../middleware/auth';
+
+const router = Router();
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/v1/auth/google/callback';
+
+if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: GOOGLE_CLIENT_ID,
+        clientSecret: GOOGLE_CLIENT_SECRET,
+        callbackURL: GOOGLE_CALLBACK_URL,
+      },
+      async (accessToken, refreshToken, profile, done) => {
+        try {
+          const user = {
+            id: `usr_${profile.id}`,
+            googleId: profile.id,
+            email: profile.emails?.[0]?.value || '',
+            name: profile.displayName || 'Google User',
+            avatarUrl: profile.photos?.[0]?.value || null,
+          };
+          return done(null, user);
+        } catch (err) {
+          return done(err as Error, undefined);
+        }
+      }
+    )
+  );
+}
+
+// Passport serialization
+passport.serializeUser((user: any, done) => {
+  done(null, user);
+});
+passport.deserializeUser((user: any, done) => {
+  done(null, user);
+});
+
+// GET /api/v1/auth/google
+router.get('/google', (req: Request, res: Response, next) => {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    // If running in development without credentials, provide a clear direct dev login
+    const devUser = {
+      id: 'usr_demo_likhith',
+      googleId: 'google_demo_1092830192',
+      email: 'splikith04@gmail.com',
+      name: 'Likhith S P',
+      avatarUrl: 'https://avatar.vercel.sh/likhith'
+    };
+    (req.session as any).user = devUser;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    return res.redirect(`${frontendUrl}/dashboard`);
+  }
+
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    prompt: 'select_account',
+  })(req, res, next);
+});
+
+// GET /api/v1/auth/google/callback
+router.get(
+  '/google/callback',
+  (req: Request, res: Response, next) => {
+    passport.authenticate('google', (err: any, user: any) => {
+      if (err || !user) {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/login?error=auth_failed`);
+      }
+      (req.session as any).user = user;
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return res.redirect(`${frontendUrl}/dashboard`);
+    })(req, res, next);
+  }
+);
+
+// GET /api/v1/auth/me
+router.get('/me', requireAuth, (req: Request, res: Response) => {
+  res.json({
+    id: req.user!.id,
+    name: req.user!.name,
+    email: req.user!.email,
+    avatarUrl: req.user!.avatarUrl || null,
+  });
+});
+
+// POST /api/v1/auth/dev-login (facilitates testing & demo without Google credentials)
+router.post('/dev-login', (req: Request, res: Response) => {
+  const { email, name } = req.body || {};
+  const user = {
+    id: 'usr_demo_likhith',
+    googleId: 'google_demo_1092830192',
+    email: email || 'splikith04@gmail.com',
+    name: name || 'Likhith S P',
+    avatarUrl: 'https://avatar.vercel.sh/likhith'
+  };
+  (req.session as any).user = user;
+  res.json(user);
+});
+
+// POST /api/v1/auth/logout
+router.post('/logout', (req: Request, res: Response) => {
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: { code: 'LOGOUT_FAILED', message: 'Could not log out' } });
+      }
+      res.clearCookie('connect.sid');
+      return res.json({ success: true, message: 'Logged out successfully' });
+    });
+  } else {
+    res.json({ success: true });
+  }
+});
+
+export default router;
