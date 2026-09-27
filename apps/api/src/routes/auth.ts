@@ -121,13 +121,31 @@ router.get(
 );
 
 // GET /api/v1/auth/me
-router.get('/me', requireAuth, (req: Request, res: Response) => {
-  res.json({
-    id: req.user!.id,
-    name: req.user!.name,
-    email: req.user!.email,
-    avatarUrl: req.user!.avatarUrl || null,
-  });
+router.get('/me', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const dbUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: req.user!.id },
+          { email: req.user!.email },
+        ],
+      },
+    });
+
+    res.json({
+      id: dbUser?.id || req.user!.id,
+      name: dbUser?.name || req.user!.name,
+      email: dbUser?.email || req.user!.email,
+      avatarUrl: dbUser?.avatarUrl || req.user!.avatarUrl || null,
+    });
+  } catch {
+    res.json({
+      id: req.user!.id,
+      name: req.user!.name,
+      email: req.user!.email,
+      avatarUrl: req.user!.avatarUrl || null,
+    });
+  }
 });
 
 // POST /api/v1/auth/dev-login (facilitates testing & demo)

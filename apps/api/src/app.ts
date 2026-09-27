@@ -49,6 +49,10 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
+app.get('/', (req: Request, res: Response) => {
+  res.redirect('/admin/queues');
+});
+
 app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',

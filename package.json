@@ -19,6 +19,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:generate": "npx prisma generate",
+    "db:push": "npx prisma db push --skip-generate",
     "db:migrate": "npx prisma migrate dev",
     "db:studio": "npx prisma studio"
   },
