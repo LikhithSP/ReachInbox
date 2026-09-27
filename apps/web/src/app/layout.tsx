@@ -9,8 +9,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'ReachInbox Email Scheduler',
+  title: 'ReachInbox - Email Scheduler',
   description: 'Full-stack email scheduling and delivery management platform',
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({

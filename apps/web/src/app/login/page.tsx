@@ -1,30 +1,60 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    document.title = isSignUp ? 'ReachInbox - Create Account' : 'ReachInbox - Login';
+  }, [isSignUp]);
 
   const handleGoogleLogin = () => {
     window.location.href = 'http://localhost:4000/api/v1/auth/google';
   };
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg('');
+
+    if (isSignUp) {
+      if (!email.trim() || !password) {
+        setErrorMsg('Please enter both email and password');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMsg('Passwords do not match');
+        return;
+      }
+      if (password.length < 6) {
+        setErrorMsg('Password should be at least 6 characters');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const res = await fetch('http://localhost:4000/api/v1/auth/dev-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          email: email || 'oliver.brown@domain.io',
-          name: 'Oliver Brown',
+          email: email.trim() || 'oliver.brown@domain.io',
+          name: name.trim() || (email.split('@')[0] ? email.split('@')[0].replace(/[._-]/g, ' ') : 'User'),
         }),
       });
+
       if (res.ok) {
         router.push('/dashboard');
       } else {
@@ -43,25 +73,41 @@ export default function LoginPage() {
         fontFamily: "var(--font-inter), 'Inter', sans-serif",
         letterSpacing: '-0.15px',
       }}
-      className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-4 text-slate-900"
+      className="min-h-screen bg-[#F3F4F6] flex items-center justify-center p-4 text-slate-900 relative overflow-hidden"
     >
+
       <div
         style={{
           fontFamily: "var(--font-inter), 'Inter', sans-serif",
           letterSpacing: '-0.15px',
           border: '1px solid rgba(0, 0, 0, 0.15)',
         }}
-        className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-10 flex flex-col items-center"
+        className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-10 flex flex-col items-center relative z-10"
       >
-        <h1
-          style={{
-            fontFamily: "var(--font-inter), 'Inter', sans-serif",
-            letterSpacing: '-0.25px',
-          }}
-          className="text-[28px] font-bold text-slate-900 mb-8"
-        >
-          Login
-        </h1>
+        {/* SaaS Heading & Subtitle */}
+        <div className="text-center mb-6">
+          <h1
+            style={{
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              letterSpacing: '-0.4px',
+            }}
+            className="text-[26px] font-bold text-slate-900 tracking-tight"
+          >
+            {isSignUp ? 'Create your account' : 'Welcome back'}
+          </h1>
+          <p
+            style={{
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              fontSize: '13px',
+              letterSpacing: '-0.15px',
+            }}
+            className="text-slate-500 mt-1.5"
+          >
+            {isSignUp
+              ? 'Start scheduling cold emails and scale your outreach today.'
+              : 'Enter your credentials to manage your email schedules.'}
+          </p>
+        </div>
 
         {/* Google Login button matching Figma */}
         <button
@@ -92,7 +138,7 @@ export default function LoginPage() {
               d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.27 2.57 1.25 6.57l4.03 3.14c.95-2.83 3.6-4.96 6.72-4.96z"
             />
           </svg>
-          <span>Login with Google</span>
+          <span>{isSignUp ? 'Sign up with Google' : 'Login with Google'}</span>
         </button>
 
         {/* Divider */}
@@ -106,16 +152,41 @@ export default function LoginPage() {
             }}
             className="px-3 text-slate-400 font-normal"
           >
-            or sign up through email
+            {isSignUp ? 'or register with email' : 'or sign up through email'}
           </span>
           <div className="flex-1 border-t border-slate-100"></div>
         </div>
 
+        {/* Error notification if passwords mismatch */}
+        {errorMsg && (
+          <div className="w-full mb-3 px-3.5 py-2 rounded-xl bg-red-50 border border-red-200/80 text-red-600 text-xs text-center font-medium">
+            {errorMsg}
+          </div>
+        )}
+
         {/* Email & Password Form */}
-        <form onSubmit={handleEmailLogin} className="w-full space-y-3.5">
+        <form onSubmit={handleAuthSubmit} className="w-full space-y-3.5">
+          {isSignUp && (
+            <div>
+              <input
+                type="text"
+                placeholder="Full Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={{
+                  fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                  fontSize: '14px',
+                  letterSpacing: '-0.15px',
+                }}
+                className="w-full h-12 px-4 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] transition border border-transparent focus:bg-white"
+              />
+            </div>
+          )}
+
           <div>
             <input
-              type="text"
+              type="email"
+              required
               placeholder="Email ID"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -128,9 +199,10 @@ export default function LoginPage() {
             />
           </div>
 
-          <div>
+          <div className="relative">
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
+              required
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -139,9 +211,44 @@ export default function LoginPage() {
                 fontSize: '14px',
                 letterSpacing: '-0.15px',
               }}
-              className="w-full h-12 px-4 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] transition border border-transparent focus:bg-white"
+              className="w-full h-12 pl-4 pr-11 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] transition border border-transparent focus:bg-white"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              title={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4 stroke-[1.75]" /> : <Eye className="w-4 h-4 stroke-[1.75]" />}
+            </button>
           </div>
+
+          {/* Verify Password Field (for Sign Up) */}
+          {isSignUp && (
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                required
+                placeholder="Verify Password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                style={{
+                  fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                  fontSize: '14px',
+                  letterSpacing: '-0.15px',
+                }}
+                className="w-full h-12 pl-4 pr-11 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] transition border border-transparent focus:bg-white"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                title={showConfirmPassword ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPassword ? <EyeOff className="w-4 h-4 stroke-[1.75]" /> : <Eye className="w-4 h-4 stroke-[1.75]" />}
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -153,9 +260,49 @@ export default function LoginPage() {
             }}
             className="w-full h-12 mt-2 bg-[#00A843] hover:bg-[#00923a] text-white font-medium rounded-xl shadow-[0_2px_8px_rgba(0,168,67,0.25)] transition duration-150 flex items-center justify-center cursor-pointer"
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? (isSignUp ? 'Creating Account...' : 'Logging in...') : (isSignUp ? 'Create Account' : 'Login')}
           </button>
         </form>
+
+        {/* Toggle between Login and Create Account at bottom */}
+        <div
+          style={{
+            fontFamily: "var(--font-inter), 'Inter', sans-serif",
+            fontSize: '13px',
+            letterSpacing: '-0.15px',
+          }}
+          className="mt-6 pt-2 text-center text-slate-500"
+        >
+          {isSignUp ? (
+            <p>
+              Already have an account?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(false);
+                  setErrorMsg('');
+                }}
+                className="font-semibold text-[#00A843] hover:underline cursor-pointer ml-1"
+              >
+                Sign in
+              </button>
+            </p>
+          ) : (
+            <p>
+              Don&apos;t have an account?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(true);
+                  setErrorMsg('');
+                }}
+                className="font-semibold text-[#00A843] hover:underline cursor-pointer ml-1"
+              >
+                Create an account
+              </button>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
