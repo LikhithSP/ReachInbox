@@ -196,13 +196,17 @@ export default function DashboardPage() {
       if (res.ok) {
         setShowSendLater(false);
         setViewMode('list');
-        fetchEmails();
+        await fetchEmails();
       } else {
+        const errorData = await res.json().catch(() => ({}));
+        const msg = errorData?.error?.message || `HTTP ${res.status}: Failed to schedule campaign`;
+        alert(`Error: ${msg}\nMake sure MySQL and Redis are running (or docker compose up -d).`);
         setShowSendLater(false);
         setViewMode('list');
-        fetchEmails();
       }
-    } catch {
+    } catch (err: any) {
+      console.error('Failed to submit campaign:', err);
+      alert(`Network error connecting to API server at http://localhost:4000: ${err.message}.\nCheck that npm run dev:api is running.`);
       setShowSendLater(false);
       setViewMode('list');
     } finally {
@@ -428,90 +432,48 @@ export default function DashboardPage() {
 
             {/* Email Message Content */}
             <div className="flex-1 p-8 max-w-4xl overflow-y-auto space-y-6">
-              {/* Sender info */}
+              {/* Sender & Recipient info */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-[#00A843] text-white flex items-center justify-center font-bold text-sm">
-                    A
+                    {selectedEmail.recipient ? selectedEmail.recipient.charAt(0).toUpperCase() : 'U'}
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-900">
-                      Amanda Clark{' '}
-                      <span className="text-slate-400 font-normal">
-                        &lt;{selectedEmail.sender?.email || 'sender@example.com'}&gt;
-                      </span>
+                      To: {selectedEmail.recipient}
                     </p>
-                    <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                      to me <ChevronDown className="w-3 h-3 text-slate-400" />
+                    <p className="text-[11px] text-slate-500">
+                      From: {selectedEmail.sender?.email || 'oliver.brown@domain.io'}
                     </p>
                   </div>
                 </div>
-                <span className="text-xs text-slate-400 font-medium">
-                  Nov 3, 10:23 AM
-                </span>
+                <div className="text-right">
+                  <span className="text-xs text-slate-400 font-medium block">
+                    {selectedEmail.sentAt
+                      ? new Date(selectedEmail.sentAt).toLocaleString()
+                      : new Date(selectedEmail.scheduledAt).toLocaleString()}
+                  </span>
+                  <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {selectedEmail.status}
+                  </span>
+                </div>
               </div>
 
               {/* Message text */}
-              <div className="text-xs text-slate-800 leading-relaxed space-y-4 pt-2">
-                <p>Hey Oliver,</p>
-                <p>You&apos;ve just RECEIVED something</p>
-
-                {/* Highlight banner matching Figma */}
-                <div className="p-4 rounded-xl bg-[#FFFDE7] border-l-4 border-[#FBC02D] text-slate-800 space-y-1">
-                  <p className="font-bold flex items-center gap-1">
-                    ⚡ Extremely Exclusive—Only 4 Spots Worldwide Per Year | $25,000 investment ⚡
-                  </p>
-                  <p className="text-slate-600">
-                    ⚡ To explore securing your private transformation, simply reply right now with <b>&quot;FLY OUT FIX&quot;</b> .
-                  </p>
-                </div>
-
-                <p>Your coach for world-class performance,</p>
-                <p className="font-semibold">Grant</p>
-                <p className="italic text-slate-500">
-                  P.S. Always remember that you can develop world class technique! 🚀
-                </p>
-
-                {/* Attachments preview cards */}
-                <div className="pt-4 flex items-center gap-4">
-                  <div className="w-44 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                    <img
-                      src="https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&q=80&w=400"
-                      alt="Tennis Coach"
-                      className="w-full h-24 object-cover"
-                    />
-                    <div className="p-2 bg-white">
-                      <p className="text-[11px] font-semibold text-slate-900 truncate">
-                        Tennis_Coach_Profile.png
-                      </p>
-                      <p className="text-[10px] text-slate-400">1.2 MB</p>
-                    </div>
-                  </div>
-
-                  <div className="w-44 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                    <img
-                      src="https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&q=80&w=400"
-                      alt="Tennis Coach"
-                      className="w-full h-24 object-cover"
-                    />
-                    <div className="p-2 bg-white">
-                      <p className="text-[11px] font-semibold text-slate-900 truncate">
-                        Tennis_Coach_Profile2.png
-                      </p>
-                      <p className="text-[10px] text-slate-400">1.2 MB</p>
-                    </div>
-                  </div>
+              <div className="text-xs text-slate-800 leading-relaxed pt-2 space-y-4">
+                <div className="whitespace-pre-wrap font-sans text-sm text-slate-700 bg-[#F9FBFA] p-5 rounded-xl border border-slate-100">
+                  {selectedEmail.body || 'No message content.'}
                 </div>
 
                 {selectedEmail.errorMessage?.includes('Preview:') && (
-                  <div className="pt-4">
+                  <div className="pt-2">
                     <a
                       href={selectedEmail.errorMessage.replace('Preview: ', '')}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 text-indigo-600 font-semibold text-xs border border-indigo-100"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-50 text-[#00A843] font-semibold text-xs border border-emerald-100 hover:bg-emerald-100/70 transition"
                     >
-                      <span>View in Ethereal Sandbox</span>
+                      <span>Open Delivered Email in Ethereal Sandbox</span>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>

@@ -36,11 +36,15 @@ router.get('/scheduled', requireAuth, async (req: Request, res: Response, next: 
           id: true,
           recipient: true,
           subject: true,
+          body: true,
           scheduledAt: true,
           status: true,
           attempts: true,
           campaignId: true,
           createdAt: true,
+          sender: {
+            select: { email: true }
+          }
         },
       }),
       prisma.emailJob.count({ where }),
@@ -91,6 +95,7 @@ router.get('/sent', requireAuth, async (req: Request, res: Response, next: NextF
           id: true,
           recipient: true,
           subject: true,
+          body: true,
           scheduledAt: true,
           sentAt: true,
           failedAt: true,
@@ -98,6 +103,9 @@ router.get('/sent', requireAuth, async (req: Request, res: Response, next: NextF
           errorMessage: true,
           attempts: true,
           campaignId: true,
+          sender: {
+            select: { email: true }
+          }
         },
       }),
       prisma.emailJob.count({ where }),

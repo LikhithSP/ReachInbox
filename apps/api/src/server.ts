@@ -1,3 +1,7 @@
+import dotenv from 'dotenv';
+dotenv.config({ path: '../../.env' });
+dotenv.config();
+
 import app from './app';
 import { SchedulerService } from './services/scheduler.service';
 import { startEmailWorker } from './workers';
@@ -11,3 +15,5 @@ app.listen(PORT, async () => {
   // Start background worker
   startEmailWorker();
 });
+
+// Database tables initialized
