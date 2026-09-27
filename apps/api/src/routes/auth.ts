@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { requireAuth } from '../middleware/auth';
@@ -18,7 +18,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
         clientSecret: GOOGLE_CLIENT_SECRET,
         callbackURL: GOOGLE_CALLBACK_URL,
       },
-      async (accessToken, refreshToken, profile, done) => {
+      async (accessToken: string, refreshToken: string, profile: any, done: any) => {
         try {
           const email = profile.emails?.[0]?.value || `google_${profile.id}@reachinbox.ai`;
           const name = profile.displayName || 'Google User';
@@ -83,7 +83,7 @@ passport.deserializeUser((user: any, done) => {
 });
 
 // GET /api/v1/auth/google
-router.get('/google', (req: Request, res: Response, next) => {
+router.get('/google', (req: Request, res: Response, next: NextFunction) => {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     // If running in development without credentials, provide a clear direct dev login
     const devUser = {
@@ -107,7 +107,7 @@ router.get('/google', (req: Request, res: Response, next) => {
 // GET /api/v1/auth/google/callback
 router.get(
   '/google/callback',
-  (req: Request, res: Response, next) => {
+  (req: Request, res: Response, next: NextFunction) => {
     passport.authenticate('google', (err: any, user: any) => {
       if (err || !user) {
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -149,7 +149,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/auth/dev-login (facilitates testing & demo)
-router.post('/dev-login', async (req: Request, res: Response, next) => {
+router.post('/dev-login', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, name } = req.body || {};
     const userEmail = email || 'splikith04@gmail.com';
@@ -182,7 +182,7 @@ router.post('/dev-login', async (req: Request, res: Response, next) => {
     };
 
     (req.session as any).user = user;
-    req.session.save((err) => {
+    req.session.save((err: any) => {
       if (err) {
         console.warn('Session save error:', err);
       }
@@ -196,7 +196,7 @@ router.post('/dev-login', async (req: Request, res: Response, next) => {
 // POST /api/v1/auth/logout
 router.post('/logout', (req: Request, res: Response) => {
   if (req.session) {
-    req.session.destroy((err) => {
+    req.session.destroy((err: any) => {
       res.clearCookie('connect.sid');
       return res.json({ success: true, message: 'Logged out successfully' });
     });
