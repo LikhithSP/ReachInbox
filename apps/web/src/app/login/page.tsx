@@ -38,9 +38,28 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-4 font-sans text-slate-900">
-      <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-10 flex flex-col items-center">
-        <h1 className="text-[28px] font-bold tracking-tight text-slate-900 mb-8">
+    <div
+      style={{
+        fontFamily: "var(--font-inter), 'Inter', sans-serif",
+        letterSpacing: '-0.15px',
+      }}
+      className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-4 text-slate-900"
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-inter), 'Inter', sans-serif",
+          letterSpacing: '-0.15px',
+          border: '1px solid rgba(0, 0, 0, 0.15)',
+        }}
+        className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-10 flex flex-col items-center"
+      >
+        <h1
+          style={{
+            fontFamily: "var(--font-inter), 'Inter', sans-serif",
+            letterSpacing: '-0.25px',
+          }}
+          className="text-[28px] font-bold text-slate-900 mb-8"
+        >
           Login
         </h1>
 
@@ -48,7 +67,12 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={handleGoogleLogin}
-          className="w-full h-12 flex items-center justify-center gap-3 bg-[#E8F5E9] hover:bg-[#DDF0DF] text-[#1B5E20] font-medium text-sm rounded-xl transition duration-150"
+          style={{
+            fontFamily: "var(--font-inter), 'Inter', sans-serif",
+            fontSize: '14px',
+            letterSpacing: '-0.15px',
+          }}
+          className="w-full h-12 flex items-center justify-center gap-3 bg-[#E8F5E9] hover:bg-[#DDF0DF] text-[#1B5E20] font-medium rounded-xl transition duration-150 cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path
@@ -74,7 +98,14 @@ export default function LoginPage() {
         {/* Divider */}
         <div className="w-full flex items-center my-6">
           <div className="flex-1 border-t border-slate-100"></div>
-          <span className="px-3 text-xs text-slate-400 font-normal">
+          <span
+            style={{
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              fontSize: '12px',
+              letterSpacing: '-0.15px',
+            }}
+            className="px-3 text-slate-400 font-normal"
+          >
             or sign up through email
           </span>
           <div className="flex-1 border-t border-slate-100"></div>
@@ -88,7 +119,12 @@ export default function LoginPage() {
               placeholder="Email ID"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-12 px-4 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 text-sm rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] transition border border-transparent focus:bg-white"
+              style={{
+                fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                fontSize: '14px',
+                letterSpacing: '-0.15px',
+              }}
+              className="w-full h-12 px-4 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] transition border border-transparent focus:bg-white"
             />
           </div>
 
@@ -98,14 +134,24 @@ export default function LoginPage() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-12 px-4 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 text-sm rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] transition border border-transparent focus:bg-white"
+              style={{
+                fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                fontSize: '14px',
+                letterSpacing: '-0.15px',
+              }}
+              className="w-full h-12 px-4 bg-[#F5F7F6] text-slate-800 placeholder-slate-400 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] transition border border-transparent focus:bg-white"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-12 mt-2 bg-[#00A843] hover:bg-[#00923a] text-white font-medium text-sm rounded-xl shadow-[0_2px_8px_rgba(0,168,67,0.25)] transition duration-150 flex items-center justify-center"
+            style={{
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              fontSize: '14px',
+              letterSpacing: '-0.15px',
+            }}
+            className="w-full h-12 mt-2 bg-[#00A843] hover:bg-[#00923a] text-white font-medium rounded-xl shadow-[0_2px_8px_rgba(0,168,67,0.25)] transition duration-150 flex items-center justify-center cursor-pointer"
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
