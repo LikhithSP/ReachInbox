@@ -1,0 +1,233 @@
+/* ReachInbox Custom Modern Theme for Bull-Board */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary: #00A843;
+  --primary-hover: #008F38;
+  --primary-light: #E5F5EB;
+  --primary-subtle: #F0FAF4;
+  --menu-width: 250px;
+  --header-height: 64px;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --failed: #EF4444;
+  --completed: #00A843;
+  --waiting: #F59E0B;
+  --waitingChildren: #FB923C;
+  --prioritized: #8B5CF6;
+  --active: #3B82F6;
+  --delayed: #6366F1;
+  --paused: #94A3B8;
+}
+
+body, html {
+  font-family: var(--font-family) !important;
+  background-color: #F8FAFC !important;
+  color: #1E293B !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Header Bar Styling */
+.Qp5xkm {
+  height: var(--header-height) !important;
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Header Brand / Logo Section */
+.Qp5xkm > .KmtwbG {
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+  border-right: 1px solid #E2E8F0 !important;
+  box-shadow: none !important;
+  color: #0F172A !important;
+  font-family: var(--font-family) !important;
+  font-weight: 700 !important;
+  font-size: 1.15rem !important;
+  letter-spacing: -0.02em !important;
+  padding: 0 1.25rem !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+
+.Qp5xkm > .KmtwbG > .hIscLx {
+  max-height: 28px !important;
+}
+
+/* Top bar nav buttons */
+.Qp5xkm .C16NVy {
+  padding: 0 1.5rem !important;
+}
+
+/* Sidebar Menu */
+.KM3iIV {
+  background: #FFFFFF !important;
+  border-right: 1px solid #E2E8F0 !important;
+  box-shadow: none !important;
+  color: #475569 !important;
+  top: var(--header-height) !important;
+  width: var(--menu-width) !important;
+}
+
+.KM3iIV ._SQRTj {
+  color: #94A3B8 !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  padding: 0.5rem 1.25rem !important;
+}
+
+.xQ9Bfk li + li {
+  border-top: none !important;
+}
+
+.xQ9Bfk a {
+  border-left: 3px solid transparent !important;
+  color: #475569 !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  padding: 0.75rem 1.25rem !important;
+  border-radius: 0 8px 8px 0 !important;
+  margin-right: 0.5rem !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.xQ9Bfk a:hover {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+  border-left-color: #CBD5E1 !important;
+}
+
+.xQ9Bfk a.xIyUVd {
+  background-color: #E5F5EB !important;
+  color: #00A843 !important;
+  font-weight: 600 !important;
+  border-left-color: #00A843 !important;
+}
+
+/* Sidebar search input */
+.NaAPYH.NaAPYH {
+  background-color: #F8FAFC !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #0F172A !important;
+  font-size: 0.875rem !important;
+  border-radius: 8px !important;
+}
+
+.NaAPYH.NaAPYH:focus {
+  border-color: #00A843 !important;
+  box-shadow: 0 0 0 2px #E5F5EB !important;
+}
+
+/* Main Content Area */
+main {
+  padding-left: var(--menu-width) !important;
+  background-color: #F8FAFC !important;
+}
+
+main > div {
+  padding: 2rem 2.5rem !important;
+  max-width: 1400px;
+}
+
+/* Queue title & description */
+.fMa60A {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  color: #0F172A !important;
+  letter-spacing: -0.02em !important;
+}
+
+.k38HgG {
+  font-size: 0.875rem !important;
+  color: #64748B !important;
+  margin-top: 0.25rem !important;
+}
+
+/* Status tabs & badges */
+.AisLsJ {
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  font-size: 0.8125rem !important;
+  transition: all 0.15s ease !important;
+}
+
+.AisLsJ.tiYzES:hover {
+  background-color: #F1F5F9 !important;
+}
+
+.AisLsJ.cdc4_x {
+  background-color: #00A843 !important;
+  color: #FFFFFF !important;
+}
+
+.AisLsJ.cdc4_x:hover {
+  background-color: #008F38 !important;
+}
+
+/* Cards & Modals */
+.xk3VMI {
+  border-radius: 12px !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid #E2E8F0 !important;
+}
+
+/* Table and list styling */
+table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: 100% !important;
+  background: #FFFFFF !important;
+  border-radius: 10px !important;
+  border: 1px solid #E2E8F0 !important;
+  overflow: hidden !important;
+}
+
+th {
+  background: #F8FAFC !important;
+  color: #475569 !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  padding: 0.75rem 1rem !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+td {
+  padding: 0.875rem 1rem !important;
+  border-bottom: 1px solid #F1F5F9 !important;
+  font-size: 0.875rem !important;
+  color: #1E293B !important;
+}
+
+tr:hover td {
+  background-color: #F8FAFC !important;
+}
+
+/* Buttons */
+button {
+  cursor: pointer !important;
+}
+
+/* Clean scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}

@@ -12,6 +12,8 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { emailQueue } from './queues/emailQueue';
 
+import path from 'path';
+
 const app = express();
 
 // Bull Board UI for queue monitoring and operational observability (RI-050)
@@ -20,7 +22,26 @@ serverAdapter.setBasePath('/admin/queues');
 createBullBoard({
   queues: [new BullMQAdapter(emailQueue) as any],
   serverAdapter,
+  options: {
+    uiConfig: {
+      boardTitle: 'BullMQ Dashboard',
+      miscLinks: [
+        {
+          text: 'ReachInbox Dashboard',
+          url: process.env.FRONTEND_URL || 'http://localhost:3000',
+        },
+      ],
+    },
+  },
 });
+
+// Override views path and serve custom ReachInbox CSS theme
+serverAdapter.setViewsPath(path.join(__dirname, 'views'));
+serverAdapter.setStaticPath(
+  '/static/reachinbox-theme.css',
+  path.join(__dirname, 'views/bullboard.css')
+);
+
 app.use('/admin/queues', serverAdapter.getRouter());
 
 app.use(requestIdMiddleware);
