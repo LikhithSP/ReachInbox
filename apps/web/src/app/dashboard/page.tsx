@@ -3779,118 +3779,115 @@ export default function DashboardPage() {
 
       {/* SLACK INTEGRATION MODAL */}
       {showSlackModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 relative border border-slate-100 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div
+            style={{
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              letterSpacing: '-0.15px',
+            }}
+            className="bg-white rounded-2xl shadow-xl max-w-[440px] w-full p-6 relative border border-slate-100 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150"
+          >
             {/* Header */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#4A154B]/10 flex items-center justify-center text-[#4A154B]">
-                  <MessageSquare className="w-5 h-5 stroke-[2]" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#4A154B]/10 flex items-center justify-center text-[#4A154B]">
+                  <MessageSquare className="w-4 h-4 stroke-[2]" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Slack Alerts Integration</h3>
-                  <p className="text-xs text-slate-500">Live notifications when hourly email limits are reached</p>
+                  <h3 className="text-[15px] font-semibold text-slate-900 leading-snug">Slack Alerts</h3>
+                  <p className="text-[12px] text-slate-500">Live notifications when hourly limits are reached</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowSlackModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Status Banner */}
-            <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
-              slackConnected ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <span className={`w-2.5 h-2.5 rounded-full ${slackConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                <div>
-                  <p className="text-xs font-semibold text-slate-800">
-                    {slackConnected ? `Connected to ${slackTeamName || 'Slack'}` : 'Slack Not Connected'}
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    {slackConnected ? `Alerts posted to ${slackChannelName || '#alerts'}` : 'Rate limits will not notify until connected'}
-                  </p>
+            {/* Status Card when Connected */}
+            {slackConnected ? (
+              <div className="p-3.5 bg-[#F4F6F5] rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-[#00A843] shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-slate-900 truncate">
+                      Connected
+                    </p>
+                    <p className="text-[12px] text-slate-500 truncate">
+                      Alerts posted to #alerts
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              {slackConnected && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
+                    type="button"
                     onClick={handleSendSlackTest}
                     disabled={slackLoading}
-                    className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                    className="px-3 py-1.5 text-[12px] font-medium text-slate-700 bg-white border border-slate-200/80 rounded-lg hover:bg-slate-50 transition cursor-pointer shadow-2xs"
                   >
                     Send Test
                   </button>
                   <button
+                    type="button"
                     onClick={handleDisconnectSlack}
                     disabled={slackLoading}
-                    className="px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition cursor-pointer"
+                    className="px-2.5 py-1.5 text-[12px] font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition cursor-pointer"
                   >
                     Disconnect
                   </button>
                 </div>
-              )}
-            </div>
-
-            {/* Notification message feedback */}
-            {slackStatusMessage && (
-              <div className={`p-3 rounded-xl text-xs font-medium ${
-                slackStatusMessage.type === 'success'
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                  : 'bg-red-50 text-red-800 border border-red-200'
-              }`}>
-                {slackStatusMessage.text}
               </div>
-            )}
+            ) : (
+              /* When Not Connected: Simple input */
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="block text-[12px] font-medium text-slate-700">
+                    Slack Webhook URL
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://hooks.slack.com/services/..."
+                    value={slackWebhookInput}
+                    onChange={(e) => setSlackWebhookInput(e.target.value)}
+                    style={{
+                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                      fontSize: '13px',
+                      letterSpacing: '-0.15px',
+                    }}
+                    className="w-full h-10 px-3.5 bg-[#F4F6F5] text-slate-800 placeholder-[#9CA3AF] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] border border-transparent"
+                  />
+                </div>
 
-            {/* Method 1: Instant Webhook URL Setup (Recommended for Demo / Quick Verification) */}
-            <div className="space-y-2 border-t border-slate-100 pt-3">
-              <label className="block text-xs font-bold text-slate-700">
-                Option 1: Paste Incoming Webhook URL
-              </label>
-              <p className="text-[11px] text-slate-500">
-                Paste any Slack webhook URL (e.g. from Slack App &gt; Incoming Webhooks). Alerts will fire live immediately!
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="https://hooks.slack.com/services/T.../B.../..."
-                  value={slackWebhookInput}
-                  onChange={(e) => setSlackWebhookInput(e.target.value)}
-                  className="flex-1 text-xs px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843]"
-                />
                 <button
                   type="button"
                   onClick={handleSaveSlackWebhook}
                   disabled={slackLoading || !slackWebhookInput.trim()}
-                  className="px-4 py-2 bg-[#00A843] hover:bg-[#00923a] text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs"
+                  style={{
+                    fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                    fontSize: '13px',
+                    letterSpacing: '-0.15px',
+                  }}
+                  className="w-full h-9 bg-[#00A843] hover:bg-[#00923a] text-white font-medium rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs active:scale-[0.99] flex items-center justify-center gap-1.5"
                 >
-                  Save &amp; Test
+                  <span>Connect Slack</span>
                 </button>
               </div>
-            </div>
+            )}
 
-            {/* Method 2: OAuth Connect Flow */}
-            <div className="space-y-2 border-t border-slate-100 pt-3">
-              <label className="block text-xs font-bold text-slate-700">
-                Option 2: Connect via Slack OAuth Flow
-              </label>
-              <p className="text-[11px] text-slate-500">
-                Authorize ReachInbox directly against your Slack workspace using standard OAuth 2.0.
-              </p>
-              <button
-                type="button"
-                onClick={handleConnectSlackOAuth}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#4A154B] hover:bg-[#3d113e] text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs active:scale-[0.99]"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>Connect with Slack</span>
-              </button>
-            </div>
+            {/* Notification message feedback */}
+            {slackStatusMessage && (
+              <div className={`p-2.5 rounded-xl text-[12px] font-medium text-center ${
+                slackStatusMessage.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60'
+                  : 'bg-red-50 text-red-800 border border-red-200/60'
+              }`}>
+                {slackStatusMessage.text}
+              </div>
+            )}
           </div>
         </div>
       )}
