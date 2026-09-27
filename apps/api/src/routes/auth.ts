@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { requireAuth } from '../middleware/auth';
+import { prisma } from '../config/db';
 
 const router = Router();
 
@@ -19,12 +20,50 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
+          const email = profile.emails?.[0]?.value || `google_${profile.id}@reachinbox.ai`;
+          const name = profile.displayName || 'Google User';
+          const avatarUrl = profile.photos?.[0]?.value || null;
+
+          // Upsert user in database so all dashboard relations exist
+          const dbUser = await prisma.user.upsert({
+            where: { googleId: profile.id },
+            update: {
+              email,
+              name,
+              avatarUrl,
+            },
+            create: {
+              googleId: profile.id,
+              email,
+              name,
+              avatarUrl,
+              senders: {
+                create: {
+                  email,
+                  provider: 'ethereal',
+                },
+              },
+            },
+            include: { senders: true },
+          });
+
+          // Ensure default sender exists
+          if (!dbUser.senders || dbUser.senders.length === 0) {
+            await prisma.sender.create({
+              data: {
+                userId: dbUser.id,
+                email: dbUser.email,
+                provider: 'ethereal',
+              },
+            });
+          }
+
           const user = {
-            id: `usr_${profile.id}`,
-            googleId: profile.id,
-            email: profile.emails?.[0]?.value || '',
-            name: profile.displayName || 'Google User',
-            avatarUrl: profile.photos?.[0]?.value || null,
+            id: dbUser.id,
+            googleId: dbUser.googleId,
+            email: dbUser.email,
+            name: dbUser.name,
+            avatarUrl: dbUser.avatarUrl,
           };
           return done(null, user);
         } catch (err) {

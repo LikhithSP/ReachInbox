@@ -58,6 +58,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [scheduledCount, setScheduledCount] = useState(0);
   const [sentCount, setSentCount] = useState(0);
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; avatarUrl?: string | null }>({
+    id: 'usr_demo_likhith',
+    name: 'Oliver Brown',
+    email: 'oliver.brown@domain.io',
+    avatarUrl: null,
+  });
 
   // View state: 'list' | 'compose' | 'detail'
   const [viewMode, setViewMode] = useState<'list' | 'compose' | 'detail'>('list');
@@ -348,9 +354,18 @@ export default function DashboardPage() {
 
       // Fetch active tab list AND counts for both tabs simultaneously
       const [listRes, scheduledRes, sentRes] = await Promise.all([
-        fetch(`http://localhost:4000/api/v1/emails/${endpoint}?limit=50${searchParam}`, { headers }),
-        fetch(`http://localhost:4000/api/v1/emails/scheduled?limit=1`, { headers }),
-        fetch(`http://localhost:4000/api/v1/emails/sent?limit=1`, { headers }),
+        fetch(`http://localhost:4000/api/v1/emails/${endpoint}?limit=50${searchParam}`, {
+          headers,
+          credentials: 'include',
+        }),
+        fetch(`http://localhost:4000/api/v1/emails/scheduled?limit=1`, {
+          headers,
+          credentials: 'include',
+        }),
+        fetch(`http://localhost:4000/api/v1/emails/sent?limit=1`, {
+          headers,
+          credentials: 'include',
+        }),
       ]);
 
       if (listRes.ok) {
@@ -373,6 +388,20 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Fetch authenticated user profile
+    fetch('http://localhost:4000/api/v1/auth/me', {
+      credentials: 'include',
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.email) {
+          setCurrentUser(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchEmails();
@@ -425,10 +454,11 @@ export default function DashboardPage() {
 
       const res = await fetch('http://localhost:4000/api/v1/campaigns', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'x-dev-user-id': 'usr_demo_oliver',
-          'x-dev-user-email': 'oliver.brown@domain.io',
+          'x-dev-user-id': currentUser.id,
+          'x-dev-user-email': currentUser.email,
         },
         body: JSON.stringify({
           subject: composeSubject || 'No Subject',
@@ -555,9 +585,25 @@ export default function DashboardPage() {
           className="flex items-center justify-between bg-[#F5F7F6] mb-4 cursor-pointer hover:bg-slate-100 transition self-center"
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
-              OB
-            </div>
+            {currentUser.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={currentUser.avatarUrl}
+                alt={currentUser.name}
+                className="w-8 h-8 rounded-full object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
+                {currentUser.name
+                  ? currentUser.name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()
+                  : 'U'}
+              </div>
+            )}
             <div className="min-w-0">
               <p
                 style={{
@@ -569,7 +615,7 @@ export default function DashboardPage() {
                 }}
                 className="text-slate-900 truncate mb-1"
               >
-                Oliver Brown
+                {currentUser.name || 'Oliver Brown'}
               </p>
               <p
                 style={{
@@ -581,7 +627,7 @@ export default function DashboardPage() {
                 }}
                 className="text-slate-400 truncate"
               >
-                oliver.brown@domain.io
+                {currentUser.email || 'oliver.brown@domain.io'}
               </p>
             </div>
           </div>
@@ -970,9 +1016,25 @@ export default function DashboardPage() {
                 <Star className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
                 <Archive className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
                 <Trash2 className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-[11px] ml-2 shrink-0">
-                  OB
-                </div>
+                {currentUser.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={currentUser.avatarUrl}
+                    alt={currentUser.name}
+                    className="w-8 h-8 rounded-full object-cover ml-2 shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-[11px] ml-2 shrink-0">
+                    {currentUser.name
+                      ? currentUser.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join('')
+                          .toUpperCase()
+                      : 'U'}
+                  </div>
+                )}
               </div>
             </div>
 
