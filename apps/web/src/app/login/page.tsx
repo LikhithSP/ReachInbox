@@ -82,7 +82,7 @@ export default function LoginPage() {
           letterSpacing: '-0.15px',
           border: '1px solid rgba(0, 0, 0, 0.15)',
         }}
-        className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-10 flex flex-col items-center relative z-10"
+        className="w-full max-w-[440px] bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 sm:p-8 md:p-10 flex flex-col items-center relative z-10"
       >
         {/* SaaS Heading & Subtitle */}
         <div className="text-center mb-6">
