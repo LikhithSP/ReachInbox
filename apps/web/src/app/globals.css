@@ -14,41 +14,59 @@ body {
   font-family: var(--font-inter), 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Rich Text Editor Elements styling (overriding Tailwind base reset) */
-.rich-editor ol {
+/* Rich Text Editor and Preview Elements styling (overriding Tailwind base reset) */
+.rich-editor ol, .rich-preview ol {
   list-style-type: decimal !important;
   padding-left: 28px !important;
   margin: 6px 0 !important;
 }
 
-.rich-editor ul {
+.rich-editor ul, .rich-preview ul {
   list-style-type: disc !important;
   padding-left: 28px !important;
   margin: 6px 0 !important;
 }
 
-.rich-editor li {
+.rich-editor li, .rich-preview li {
   display: list-item !important;
   margin: 3px 0 !important;
 }
 
-.rich-editor blockquote {
+.rich-editor blockquote, .rich-preview blockquote {
   border-left: 3px solid #00A843 !important;
-  padding-left: 12px !important;
-  margin: 8px 0 !important;
+  padding-left: 14px !important;
+  margin: 10px 0 !important;
   color: #475569 !important;
   font-style: italic !important;
-  background-color: #F8FAF9 !important;
-  padding-top: 4px !important;
-  padding-bottom: 4px !important;
+  background-color: #F1F7F4 !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
   border-radius: 0 8px 8px 0 !important;
 }
 
-.rich-editor h2 {
+.rich-editor h2, .rich-preview h2 {
   font-size: 18px !important;
   font-weight: 700 !important;
   margin: 8px 0 4px 0 !important;
   line-height: 130% !important;
   color: #0f172a !important;
+}
+
+.rich-preview table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 10px 0 !important;
+}
+
+.rich-preview td, .rich-preview th {
+  border: 1px solid #E2E8F0 !important;
+  padding: 8px 12px !important;
+}
+
+.rich-preview img {
+  max-width: 100% !important;
+  height: auto !important;
+  border-radius: 8px !important;
+  margin: 8px 0 !important;
 }
 

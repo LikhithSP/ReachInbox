@@ -37,6 +37,8 @@ import {
   Upload,
   X,
   FileText,
+  Pencil,
+  Check,
 } from 'lucide-react';
 
 interface EmailItem {
@@ -59,9 +61,12 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'SCHEDULED' | 'QUEUED' | 'SENT' | 'FAILED'>('ALL');
   const [scheduledCount, setScheduledCount] = useState(0);
   const [sentCount, setSentCount] = useState(0);
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; avatarUrl?: string | null }>({
     id: 'usr_demo_likhith',
     name: 'Oliver Brown',
@@ -82,6 +87,7 @@ export default function DashboardPage() {
   // View state: 'list' | 'compose' | 'detail'
   const [viewMode, setViewMode] = useState<'list' | 'compose' | 'detail'>('list');
   const [selectedEmail, setSelectedEmail] = useState<EmailItem | null>(null);
+  const [showRecipientDetails, setShowRecipientDetails] = useState(false);
 
   // Compose form states
   const [recipientTags, setRecipientTags] = useState<string[]>([]);
@@ -418,6 +424,18 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (viewMode === 'compose') {
+      document.title = 'ReachInbox - Compose Email';
+    } else if (viewMode === 'detail' && selectedEmail) {
+      document.title = `ReachInbox - ${selectedEmail.subject || 'Email Details'}`;
+    } else if (activeTab === 'scheduled') {
+      document.title = 'ReachInbox - Scheduled Emails';
+    } else {
+      document.title = 'ReachInbox - Sent Emails';
+    }
+  }, [viewMode, activeTab, selectedEmail]);
+
+  useEffect(() => {
     fetchEmails();
   }, [activeTab, searchQuery]);
 
@@ -446,6 +464,23 @@ export default function DashboardPage() {
       .join(' ');
   };
 
+  // Strip HTML tags and decode common entities to display clean readable text in list snippets
+  const stripHtml = (htmlStr?: string) => {
+    if (!htmlStr) return '';
+    return htmlStr
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
   // Handle Send or Send Later
   const handleSendOrSchedule = async (isScheduled: boolean) => {
     setSubmitting(true);
@@ -466,6 +501,19 @@ export default function DashboardPage() {
       const delayMs = parseInt(delaySeconds, 10) ? parseInt(delaySeconds, 10) * 1000 : 2000;
       const limit = parseInt(hourlyLimit, 10) ? parseInt(hourlyLimit, 10) : 100;
 
+      // If images or attachments were added, append them into HTML body
+      let finalBodyHtml = composeBody || 'No Content';
+      const imageAttachments = attachments.filter((att) => att.isImage && att.url);
+      if (imageAttachments.length > 0) {
+        const imagesHtml = imageAttachments
+          .map(
+            (img) =>
+              `<div style="margin-top:16px;"><img src="${img.url}" alt="${img.name}" style="max-width:100%; border-radius:8px; border:1px solid #E2E8F0;" /></div>`
+          )
+          .join('');
+        finalBodyHtml = `${finalBodyHtml}${imagesHtml}`;
+      }
+
       const res = await fetch('http://localhost:4000/api/v1/campaigns', {
         method: 'POST',
         credentials: 'include',
@@ -476,7 +524,7 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({
           subject: composeSubject || 'No Subject',
-          body: composeBody || 'No Content',
+          body: finalBodyHtml,
           startTime: effectiveStartTime,
           delayMs,
           hourlyLimit: limit,
@@ -512,167 +560,152 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-800 flex font-sans antialiased">
-      {/* 1. Left Sidebar Navigation (Matching Figma Exactly: width 260px, height 900px, border-r 1px, pt 20px, pr 16px, pb 8px, pl 8px) */}
+    <div className="h-screen w-screen overflow-hidden bg-white text-slate-800 flex font-sans antialiased">
+      {/* 1. Left Sidebar Navigation (Matching Figma Exactly: width 260px, h-screen, border-r 1px, pt 20px, pr 16px, pb 16px, pl 8px) */}
       <aside
         style={{
           width: '260px',
-          minHeight: '900px',
+          height: '100vh',
           borderRight: '1px solid #EEF2F0',
           paddingTop: '20px',
           paddingRight: '16px',
-          paddingBottom: '8px',
+          paddingBottom: '16px',
           paddingLeft: '8px',
           opacity: 1,
         }}
-        className="flex flex-col shrink-0 bg-white"
+        className="flex flex-col justify-between shrink-0 bg-white select-none"
       >
-        {/* Logo "ONB" container (width: 236, height: 39, pr: 12px, pb: 10px, pl: 12px, justify-between) */}
+        {/* Logo container: "ReachInbox Email Scheduler" */}
         <div
           style={{
             width: '236px',
-            height: '39px',
+            minHeight: '42px',
             paddingRight: '12px',
             paddingBottom: '10px',
             paddingLeft: '12px',
             opacity: 1,
           }}
-          className="flex items-center justify-between mb-4 self-center"
+          className="flex items-center mb-4 self-center"
         >
-          <svg
-            width="104"
-            height="34"
-            viewBox="0 0 29 12"
-            fill="black"
-            xmlns="http://www.w3.org/2000/svg"
-            shapeRendering="crispEdges"
-          >
-            {/* --- Letter 'O' (thick 2-unit stroke, rows 0..11, cols 0..7) --- */}
-            {/* Top horizontal bar */}
-            <rect x="2" y="0" width="4" height="2" />
-            {/* Left vertical bar */}
-            <rect x="0" y="2" width="2" height="8" />
-            {/* Right vertical bar */}
-            <rect x="6" y="2" width="2" height="8" />
-            {/* Bottom horizontal bar */}
-            <rect x="2" y="10" width="4" height="2" />
+          <div className="flex items-center gap-3">
+            {/* ReachInbox geometric envelope icon matching the crisp mechanical aesthetic */}
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="black"
+              xmlns="http://www.w3.org/2000/svg"
+              shapeRendering="crispEdges"
+              className="shrink-0"
+            >
+              {/* Outer top border */}
+              <rect x="2" y="4" width="20" height="2" />
+              {/* Outer bottom border */}
+              <rect x="2" y="18" width="20" height="2" />
+              {/* Left border */}
+              <rect x="2" y="6" width="2" height="12" />
+              {/* Right border */}
+              <rect x="20" y="6" width="2" height="12" />
+              {/* Envelope flap diagonal pixels */}
+              <rect x="4" y="6" width="2" height="2" />
+              <rect x="6" y="8" width="2" height="2" />
+              <rect x="8" y="10" width="2" height="2" />
+              <rect x="10" y="11" width="4" height="2" />
+              <rect x="14" y="10" width="2" height="2" />
+              <rect x="16" y="8" width="2" height="2" />
+              <rect x="18" y="6" width="2" height="2" />
+              {/* Green indicator badge pixel */}
+              <rect x="11" y="7" width="2" height="2" fill="#00A843" />
+            </svg>
 
-            {/* --- Letter 'N' (thick solid stems & diagonal, cols 10..18) --- */}
-            {/* Left stem */}
-            <rect x="10" y="0" width="2" height="12" />
-            {/* Diagonal step 1 */}
-            <rect x="12" y="2" width="2" height="4" />
-            {/* Diagonal step 2 */}
-            <rect x="14" y="5" width="2" height="4" />
-            {/* Right stem */}
-            <rect x="16" y="0" width="2" height="12" />
-
-            {/* --- Letter 'B' (thick solid spine & dual loops, cols 20..28) --- */}
-            {/* Left spine */}
-            <rect x="20" y="0" width="2" height="12" />
-            {/* Top horizontal */}
-            <rect x="22" y="0" width="4" height="2" />
-            {/* Top loop right */}
-            <rect x="26" y="2" width="2" height="3" />
-            {/* Middle cross bar */}
-            <rect x="22" y="5" width="4" height="2" />
-            {/* Bottom loop right */}
-            <rect x="26" y="7" width="2" height="3" />
-            {/* Bottom horizontal */}
-            <rect x="22" y="10" width="4" height="2" />
-          </svg>
+            {/* ReachInbox Email Scheduler Typography */}
+            <div className="flex flex-col leading-tight">
+              <span
+                style={{
+                  fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                  letterSpacing: '-0.35px',
+                }}
+                className="text-[17px] font-extrabold text-slate-900 tracking-tight"
+              >
+                Reach<span className="text-[#00A843]">Inbox</span>
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                  letterSpacing: '0.05em',
+                }}
+                className="text-[10.5px] font-semibold text-slate-400 uppercase mt-0.5 tracking-wider"
+              >
+                Email Scheduler
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* User profile dropdown pill with Logout option */}
-        <div className="relative self-center mb-4">
-          <div
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            style={{
-              width: '236px',
-              height: '56px',
-              borderRadius: '16px',
-              borderBottom: '1px solid #EEF2F0',
-              paddingTop: '10px',
-              paddingRight: '12px',
-              paddingBottom: '10px',
-              paddingLeft: '12px',
-              opacity: 1,
-            }}
-            className="flex items-center justify-between bg-[#F5F7F6] cursor-pointer hover:bg-slate-100 transition"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              {currentUser.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={currentUser.avatarUrl}
-                  alt={currentUser.name}
-                  className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-200"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
-                  {currentUser.name
-                    ? currentUser.name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .slice(0, 2)
-                        .join('')
-                        .toUpperCase()
-                    : 'U'}
-                </div>
-              )}
-              <div className="min-w-0">
-                <p
-                  style={{
-                    fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    lineHeight: '100%',
-                    letterSpacing: '-0.15px',
-                  }}
-                  className="text-slate-900 truncate mb-1"
-                >
-                  {currentUser.name || 'Oliver Brown'}
-                </p>
-                <p
-                  style={{
-                    fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                    fontSize: '12px',
-                    fontWeight: 400,
-                    lineHeight: '100%',
-                    letterSpacing: '-0.15px',
-                  }}
-                  className="text-slate-400 truncate"
-                >
-                  {currentUser.email || 'oliver.brown@domain.io'}
-                </p>
+        {/* User profile pill */}
+        <div
+          style={{
+            width: '236px',
+            height: '56px',
+            borderRadius: '16px',
+            borderBottom: '1px solid #EEF2F0',
+            paddingTop: '10px',
+            paddingRight: '12px',
+            paddingBottom: '10px',
+            paddingLeft: '12px',
+            opacity: 1,
+          }}
+          className="flex items-center justify-between bg-[#F5F7F6] mb-4 self-center"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {currentUser.avatarUrl && !imageLoadFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={currentUser.avatarUrl}
+                alt={currentUser.name}
+                referrerPolicy="no-referrer"
+                onError={() => setImageLoadFailed(true)}
+                className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-200"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
+                {currentUser.name
+                  ? currentUser.name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()
+                  : 'U'}
               </div>
-            </div>
-            <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
-          </div>
-
-          {/* User Dropdown Menu with Logout */}
-          {showUserMenu && (
-            <div
-              style={{
-                fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                letterSpacing: '-0.15px',
-              }}
-              className="absolute left-0 top-[60px] w-[236px] bg-white rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-slate-100 p-2 z-30 space-y-1 animate-in fade-in slide-in-from-top-1"
-            >
-              <div className="px-3 py-2 border-b border-slate-100">
-                <p className="text-xs font-semibold text-slate-900 truncate">{currentUser.name}</p>
-                <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition"
+            )}
+            <div className="min-w-0">
+              <p
+                style={{
+                  fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  lineHeight: '100%',
+                  letterSpacing: '-0.15px',
+                }}
+                className="text-slate-900 truncate mb-1"
               >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Log Out</span>
-              </button>
+                {currentUser.name || 'Oliver Brown'}
+              </p>
+              <p
+                style={{
+                  fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                  fontSize: '12px',
+                  fontWeight: 400,
+                  lineHeight: '100%',
+                  letterSpacing: '-0.15px',
+                }}
+                className="text-slate-400 truncate"
+              >
+                {currentUser.email || 'oliver.brown@domain.io'}
+              </p>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Compose Button with exact Figma properties */}
@@ -697,9 +730,9 @@ export default function DashboardPage() {
             borderRadius: '16777200px',
             border: '1px solid #00A63E',
             paddingTop: '7px',
-            paddingRight: '68px',
+            paddingRight: '20px',
             paddingBottom: '7px',
-            paddingLeft: '68px',
+            paddingLeft: '20px',
             fontFamily: "var(--font-inter), 'Inter', sans-serif",
             fontWeight: 500,
             fontSize: '14px',
@@ -709,21 +742,21 @@ export default function DashboardPage() {
             color: '#00A63E',
             opacity: 1,
           }}
-          className="mb-2 hover:bg-[#E8F5E9]/50 transition flex items-center justify-center cursor-pointer shrink-0 self-center"
+          className="mb-2 hover:bg-[#E8F5E9]/50 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 self-center"
         >
-          <span style={{ width: '63px', height: '20px', display: 'inline-block' }}>
+          <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
+          <span style={{ height: '20px', display: 'inline-block' }}>
             Compose
           </span>
         </button>
 
-        {/* Nav Section: CORE (width: 236, height: 723) */}
+        {/* Nav Section: CORE */}
         <div
           style={{
             width: '236px',
-            height: '723px',
             opacity: 1,
           }}
-          className="flex flex-col space-y-1 self-center"
+          className="flex-1 flex flex-col space-y-1 self-center"
         >
           {/* CORE Text Header (moved up: padding-top: 8px) */}
           <div
@@ -747,6 +780,7 @@ export default function DashboardPage() {
           <button
             onClick={() => {
               setActiveTab('scheduled');
+              setStatusFilter('ALL');
               setViewMode('list');
               setSelectedEmail(null);
             }}
@@ -783,6 +817,7 @@ export default function DashboardPage() {
           <button
             onClick={() => {
               setActiveTab('sent');
+              setStatusFilter('ALL');
               setViewMode('list');
               setSelectedEmail(null);
             }}
@@ -815,13 +850,33 @@ export default function DashboardPage() {
             </span>
           </button>
         </div>
+
+        {/* Visible Log Out Button at the bottom of sidebar */}
+        <div className="mt-auto pt-4 pb-2 self-center">
+          <button
+            type="button"
+            onClick={handleLogout}
+            style={{
+              width: '236px',
+              height: '38px',
+              borderRadius: '12px',
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              fontSize: '14px',
+              letterSpacing: '-0.15px',
+            }}
+            className="flex items-center gap-2.5 px-4 text-slate-600 hover:text-red-600 hover:bg-red-50/70 border border-slate-200/80 transition"
+          >
+            <LogOut className="w-4 h-4 stroke-[1.75]" />
+            <span className="font-medium">Log Out</span>
+          </button>
+        </div>
       </aside>
 
       {/* 2. Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-white">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-white">
         {/* VIEW 1: Email Lists (Scheduled or Sent) */}
         {viewMode === 'list' && (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
             {/* Top Bar (Matching Figma: height 58px, justify-between, pt 12px, px 16px) */}
             <div
               style={{
@@ -854,21 +909,146 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Filter and Refresh buttons right next to the search box */}
-                <div className="flex items-center gap-3 text-[#9CA3AF] shrink-0">
+                <div className="flex items-center gap-3 text-[#9CA3AF] shrink-0 relative">
+                  {/* Filter Popover Dropdown Button */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowFilterMenu(!showFilterMenu)}
+                      className={`p-1.5 rounded-lg transition flex items-center gap-1 cursor-pointer ${
+                        statusFilter !== 'ALL' || showFilterMenu
+                          ? 'bg-[#E5F5EB] text-[#00A843]'
+                          : 'hover:text-slate-600 hover:bg-slate-100'
+                      }`}
+                      title="Filter emails"
+                    >
+                      <Filter className="w-4 h-4 stroke-[1.75]" />
+                      {statusFilter !== 'ALL' && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#00A843]" />
+                      )}
+                    </button>
+
+                    {/* Filter Menu dropdown */}
+                    {showFilterMenu && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowFilterMenu(false)}
+                        />
+                        <div
+                          style={{
+                            fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                            letterSpacing: '-0.15px',
+                          }}
+                          className="absolute left-0 mt-2 w-52 bg-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                        >
+                          <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                              Filter by status
+                            </span>
+                            {statusFilter !== 'ALL' && (
+                              <button
+                                onClick={() => setStatusFilter('ALL')}
+                                className="text-[11px] text-[#00A843] hover:underline font-medium"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="py-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStatusFilter('ALL');
+                                setShowFilterMenu(false);
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition text-slate-800"
+                            >
+                              <span className={statusFilter === 'ALL' ? 'font-semibold text-[#00A843]' : 'font-normal'}>
+                                All emails
+                              </span>
+                              {statusFilter === 'ALL' && <Check className="w-3.5 h-3.5 text-[#00A843]" />}
+                            </button>
+
+                            {activeTab === 'scheduled' ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStatusFilter('SCHEDULED');
+                                    setShowFilterMenu(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition text-slate-800"
+                                >
+                                  <span className={statusFilter === 'SCHEDULED' ? 'font-semibold text-[#00A843]' : 'font-normal'}>
+                                    Scheduled only
+                                  </span>
+                                  {statusFilter === 'SCHEDULED' && <Check className="w-3.5 h-3.5 text-[#00A843]" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStatusFilter('QUEUED');
+                                    setShowFilterMenu(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition text-slate-800"
+                                >
+                                  <span className={statusFilter === 'QUEUED' ? 'font-semibold text-[#00A843]' : 'font-normal'}>
+                                    Queued / Rate limited
+                                  </span>
+                                  {statusFilter === 'QUEUED' && <Check className="w-3.5 h-3.5 text-[#00A843]" />}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStatusFilter('SENT');
+                                    setShowFilterMenu(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition text-slate-800"
+                                >
+                                  <span className={statusFilter === 'SENT' ? 'font-semibold text-[#00A843]' : 'font-normal'}>
+                                    Sent successfully
+                                  </span>
+                                  {statusFilter === 'SENT' && <Check className="w-3.5 h-3.5 text-[#00A843]" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStatusFilter('FAILED');
+                                    setShowFilterMenu(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition text-slate-800"
+                                >
+                                  <span className={statusFilter === 'FAILED' ? 'font-semibold text-[#00A843]' : 'font-normal'}>
+                                    Failed delivery
+                                  </span>
+                                  {statusFilter === 'FAILED' && <Check className="w-3.5 h-3.5 text-[#00A843]" />}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   <button
-                    className="p-1 hover:text-slate-600 transition"
-                    title="Filter"
-                  >
-                    <Filter className="w-4 h-4 stroke-[1.5]" />
-                  </button>
-                  <button
-                    onClick={fetchEmails}
-                    className="p-1 hover:text-slate-600 transition"
+                    onClick={() => {
+                      setIsRefreshing(true);
+                      fetchEmails();
+                      setTimeout(() => setIsRefreshing(false), 700);
+                    }}
+                    className="p-1 hover:text-slate-600 transition rounded-md hover:bg-slate-100 active:scale-95 cursor-pointer"
                     title="Refresh"
                   >
                     {/* Clockwise circular reload icon matching Figma */}
                     <svg
-                      className={`w-4 h-4 text-[#9CA3AF] hover:text-slate-600 transition ${loading ? 'animate-spin' : ''}`}
+                      className={`w-4 h-4 text-[#9CA3AF] hover:text-slate-600 transition-transform ${
+                        isRefreshing || loading ? 'animate-spin text-[#00A843]' : ''
+                      }`}
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -884,10 +1064,9 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Email Rows List (Matching Figma: height 842px, pt 16px, px 16px) */}
+            {/* Email Rows List */}
             <div
               style={{
-                minHeight: '842px',
                 paddingTop: '16px',
                 paddingRight: '16px',
                 paddingLeft: '16px',
@@ -895,7 +1074,14 @@ export default function DashboardPage() {
               }}
               className="flex-1 overflow-y-auto space-y-1"
             >
-              {loading ? (
+              {(() => {
+                const filteredEmails = emails.filter((item) => {
+                  if (statusFilter === 'ALL') return true;
+                  if (statusFilter === 'QUEUED') return item.status === 'QUEUED' || item.status === 'RATE_LIMITED';
+                  return item.status === statusFilter;
+                });
+
+                return loading ? (
                 <div className="space-y-3 px-6 py-4">
                   {[1, 2, 3, 4, 5].map((idx) => (
                     <div
@@ -911,44 +1097,204 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-              ) : emails.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-20 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#E5F5EB] flex items-center justify-center text-[#00A843] mb-1 shadow-sm">
-                    {activeTab === 'scheduled' ? (
-                      <Clock className="w-6 h-6 stroke-[1.75]" />
-                    ) : (
-                      <Send className="w-6 h-6 stroke-[1.75]" />
-                    )}
-                  </div>
-                  <h4
-                    style={{
-                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                      fontSize: '15px',
-                      letterSpacing: '-0.15px',
-                    }}
-                    className="font-semibold text-slate-800"
-                  >
-                    No {activeTab} emails
-                  </h4>
-                  <p
-                    style={{
-                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                      fontSize: '13px',
-                      letterSpacing: '-0.15px',
-                    }}
-                    className="text-slate-400 max-w-xs leading-relaxed"
-                  >
-                    {activeTab === 'scheduled'
-                      ? 'No queued messages waiting to be dispatched. Hit Compose to schedule a new campaign.'
-                      : 'No sent email delivery records recorded yet.'}
-                  </p>
+              ) : filteredEmails.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-16 text-center space-y-5 select-none">
+                  {searchQuery.trim() ? (
+                    /* No search results state */
+                    <>
+                      <div className="flex items-center justify-center my-2">
+                        <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_4px_16px_rgba(0,0,0,0.04)]">
+                          {/* Search circle */}
+                          <circle cx="50" cy="50" r="30" fill="#F8FAF9" stroke="#CBD5E1" strokeWidth="2.5" />
+                          {/* Ghost lines inside the search circle */}
+                          <rect x="36" y="44" width="28" height="3" rx="1.5" fill="#E2E8F0" />
+                          <rect x="36" y="52" width="20" height="3" rx="1.5" fill="#EEF2F5" />
+                          <rect x="36" y="60" width="24" height="3" rx="1.5" fill="#E2E8F0" />
+                          {/* Cross / x mark in center of circle */}
+                          <circle cx="50" cy="50" r="13" fill="#F1F5F9" />
+                          <path d="M44.5 44.5L55.5 55.5M55.5 44.5L44.5 55.5" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+                          {/* Magnifier handle */}
+                          <line x1="72" y1="72" x2="90" y2="90" stroke="#CBD5E1" strokeWidth="5" strokeLinecap="round" />
+                          <line x1="72" y1="72" x2="90" y2="90" stroke="#E2E8F0" strokeWidth="3" strokeLinecap="round" />
+                          {/* Small green dot accent */}
+                          <circle cx="76" cy="26" r="5" fill="#E5F5EB" />
+                          <path d="M73.5 26l1.5 1.5 3-3" stroke="#00A843" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                      <div className="space-y-1.5">
+                        <h4
+                          style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif", fontSize: '15px', letterSpacing: '-0.15px' }}
+                          className="font-semibold text-slate-800"
+                        >
+                          No results for &ldquo;{searchQuery}&rdquo;
+                        </h4>
+                        <p
+                          style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif", fontSize: '13px', letterSpacing: '-0.15px' }}
+                          className="text-slate-400 max-w-xs leading-relaxed"
+                        >
+                          We couldn&apos;t find any {activeTab} emails matching your search. Try a different keyword or clear the search.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif", fontSize: '13px', letterSpacing: '-0.15px' }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E5F5EB]/60 font-medium transition cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Clear search
+                      </button>
+                    </>
+                  ) : statusFilter !== 'ALL' ? (
+                    /* Filter empty state */
+                    <>
+                      <div className="flex items-center justify-center my-2">
+                        <div className="w-16 h-16 rounded-full bg-[#E5F5EB] flex items-center justify-center text-[#00A843]">
+                          <Filter className="w-7 h-7 stroke-[1.75]" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <h4
+                          style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif", fontSize: '15px', letterSpacing: '-0.15px' }}
+                          className="font-semibold text-slate-800"
+                        >
+                          No emails match status &ldquo;{statusFilter}&rdquo;
+                        </h4>
+                        <p
+                          style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif", fontSize: '13px', letterSpacing: '-0.15px' }}
+                          className="text-slate-400 max-w-xs leading-relaxed"
+                        >
+                          There are currently no emails with this status in your {activeTab} view.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter('ALL')}
+                        style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif", fontSize: '13px', letterSpacing: '-0.15px' }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E5F5EB]/60 font-medium transition cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Reset filter
+                      </button>
+                    </>
+                  ) : activeTab === 'scheduled' ? (
+                    /* Scheduled Empty State: Clean email inbox structure — no bubbles or circles */
+                    <div className="w-72 space-y-0 rounded-2xl overflow-hidden border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.05)] bg-white">
+                      {/* Inbox header bar */}
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-[#F8FAF9] border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-[#00A843]" />
+                          <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '11px', fontWeight: 600, letterSpacing: '0.03em' }} className="text-slate-500 uppercase tracking-widest">Scheduled</span>
+                        </div>
+                        <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center">
+                          <span style={{ fontSize: '9px' }} className="text-slate-400 font-bold">0</span>
+                        </div>
+                      </div>
+                      {/* Ghost email rows */}
+                      {[{ w1: 'w-24', w2: 'w-40', dim: true }, { w1: 'w-20', w2: 'w-32', dim: false }, { w1: 'w-28', w2: 'w-36', dim: true }].map((row, i) => (
+                        <div
+                          key={i}
+                          className={`flex items-center gap-3 px-4 py-3 border-b border-slate-50 ${
+                            i === 1 ? 'bg-[#F0FBF5]' : 'bg-white'
+                          }`}
+                        >
+                          <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center ${
+                            i === 1 ? 'bg-[#00A843]/10' : 'bg-slate-100'
+                          }`}>
+                            {i === 1 ? (
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 6l3 3 5-5" stroke="#00A843" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            ) : (
+                              <div className="w-3 h-3 rounded-full bg-slate-200" />
+                            )}
+                          </div>
+                          <div className="flex-1 space-y-1.5">
+                            <div className={`h-2 rounded-full ${ i === 1 ? 'bg-[#00A843]/20' : 'bg-slate-100' } ${row.w1}`} />
+                            <div className={`h-1.5 rounded-full bg-slate-100 ${row.w2}`} />
+                          </div>
+                          <div className={`h-5 w-14 rounded-full shrink-0 ${
+                            i === 1 ? 'bg-[#E5F5EB] border border-[#C8E6C9]' : 'bg-slate-100'
+                          }`} />
+                        </div>
+                      ))}
+                      {/* Empty slot */}
+                      <div className="px-4 py-3 bg-white flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full bg-slate-50 border border-dashed border-slate-200 shrink-0" />
+                        <div className="flex-1 h-2 bg-slate-50 rounded-full" />
+                      </div>
+                    </div>
+                  ) : (
+                    /* Sent Empty State: Classic empty mailbox illustration */
+                    <div className="flex items-center justify-center my-2">
+                      <svg width="140" height="130" viewBox="0 0 140 130" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_4px_16px_rgba(0,0,0,0.05)]">
+                        {/* Mailbox post */}
+                        <rect x="64" y="95" width="12" height="28" rx="3" fill="#E2E8F0" />
+                        {/* Mailbox base platform */}
+                        <rect x="44" y="118" width="52" height="7" rx="3.5" fill="#CBD5E1" />
+                        {/* Mailbox body */}
+                        <rect x="24" y="44" width="92" height="56" rx="14" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="2" />
+                        {/* Mailbox door / flap */}
+                        <path d="M24 58 Q70 78 116 58" stroke="#CBD5E1" strokeWidth="1.5" fill="none" />
+                        {/* Door slit at top of mailbox */}
+                        <rect x="38" y="40" width="64" height="8" rx="4" fill="white" stroke="#CBD5E1" strokeWidth="1.5" />
+                        {/* Mailbox flag */}
+                        <rect x="110" y="50" width="4" height="22" rx="2" fill="#CBD5E1" />
+                        <rect x="110" y="50" width="14" height="10" rx="3" fill="#E2E8F0" />
+                        {/* Empty label lines inside body */}
+                        <rect x="44" y="68" width="36" height="3" rx="1.5" fill="#E2E8F0" />
+                        <rect x="44" y="76" width="24" height="3" rx="1.5" fill="#EEF2F5" />
+                        {/* Small green leaf / dot accent */}
+                        <circle cx="70" cy="44" r="6" fill="#E5F5EB" />
+                        <path d="M67.5 44l2 2 3-3" stroke="#00A843" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        {/* Tiny envelope floating above */}
+                        <g opacity="0.45">
+                          <rect x="80" y="14" width="28" height="20" rx="4" fill="white" stroke="#CBD5E1" strokeWidth="1.5" />
+                          <path d="M80 18 L94 26 L108 18" stroke="#CBD5E1" strokeWidth="1.2" fill="none" />
+                        </g>
+                        <g opacity="0.25">
+                          <rect x="30" y="8" width="22" height="16" rx="3" fill="white" stroke="#CBD5E1" strokeWidth="1.2" />
+                          <path d="M30 12 L41 18 L52 12" stroke="#CBD5E1" strokeWidth="1" fill="none" />
+                        </g>
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* Title and description — only shown when no active search */}
+                  {!searchQuery.trim() && (
+                    <>
+                      <h4
+                        style={{
+                          fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                          fontSize: '15px',
+                          letterSpacing: '-0.15px',
+                        }}
+                        className="font-semibold text-slate-800"
+                      >
+                        {activeTab === 'scheduled' ? 'No scheduled emails' : 'Mailbox is empty'}
+                      </h4>
+                      <p
+                        style={{
+                          fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                          fontSize: '13px',
+                          letterSpacing: '-0.15px',
+                        }}
+                        className="text-slate-400 max-w-xs leading-relaxed"
+                      >
+                        {activeTab === 'scheduled'
+                          ? 'No queued messages waiting to be dispatched. Hit Compose to schedule a new campaign.'
+                          : 'Nothing here yet — sent emails will show up once your campaigns start delivering.'}
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
-                emails.map((email) => (
+                filteredEmails.map((email) => (
                   <div
                     key={email.id}
                     onClick={() => {
                       setSelectedEmail(email);
+                      setShowRecipientDetails(false);
                       setViewMode('detail');
                     }}
                     className="flex items-center justify-between px-10 py-4 hover:bg-[#F9FBFA] transition cursor-pointer group"
@@ -1006,7 +1352,7 @@ export default function DashboardPage() {
                         </span>
                         <span className="text-slate-400 shrink-0">-</span>
                         <span className="text-slate-400 font-normal truncate">
-                          {email.body || 'Hi John, just wanted to follow up on our meeting...'}
+                          {stripHtml(email.body) || 'No message content'}
                         </span>
                       </div>
                     </div>
@@ -1017,7 +1363,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))
-              )}
+              );
+            })()}
             </div>
           </div>
         )}
@@ -1029,7 +1376,7 @@ export default function DashboardPage() {
               fontFamily: "var(--font-inter), 'Inter', sans-serif",
               letterSpacing: '-0.15px',
             }}
-            className="flex-1 flex flex-col bg-white"
+            className="flex-1 flex flex-col h-full overflow-hidden bg-white"
           >
             {/* Detail Top Header */}
             <div className="px-10 pt-7 pb-5 border-b border-slate-100 flex items-center justify-between">
@@ -1057,12 +1404,14 @@ export default function DashboardPage() {
                 <Star className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
                 <Archive className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
                 <Trash2 className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
-                {currentUser.avatarUrl ? (
+                {currentUser.avatarUrl && !imageLoadFailed ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={currentUser.avatarUrl}
                     alt={currentUser.name}
-                    className="w-8 h-8 rounded-full object-cover ml-2 shrink-0"
+                    referrerPolicy="no-referrer"
+                    onError={() => setImageLoadFailed(true)}
+                    className="w-8 h-8 rounded-full object-cover ml-2 shrink-0 border border-slate-200"
                   />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-[11px] ml-2 shrink-0">
@@ -1081,33 +1430,114 @@ export default function DashboardPage() {
 
             {/* Email Message Content */}
             <div className="flex-1 p-8 max-w-4xl overflow-y-auto space-y-6">
-              {/* Sender & Recipient info */}
+              {/* Sender & Recipient header matching Gmail / modern email client style */}
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[#00A843] text-white flex items-center justify-center font-bold text-sm shadow-sm">
-                    {selectedEmail.recipient ? selectedEmail.recipient.charAt(0).toUpperCase() : 'U'}
-                  </div>
-                  <div>
-                    <p
-                      style={{
-                        fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                        fontSize: '14px',
-                        letterSpacing: '-0.15px',
-                      }}
-                      className="font-semibold text-slate-900"
-                    >
-                      To: {selectedEmail.recipient}
-                    </p>
-                    <p
-                      style={{
-                        fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                        fontSize: '12px',
-                        letterSpacing: '-0.15px',
-                      }}
-                      className="text-slate-500 mt-0.5"
-                    >
-                      From: {selectedEmail.sender?.email || 'oliver.brown@domain.io'}
-                    </p>
+                <div className="flex items-start gap-3.5">
+                  {/* User Avatar */}
+                  {currentUser.avatarUrl && !imageLoadFailed ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={currentUser.avatarUrl}
+                      alt={currentUser.name || 'User'}
+                      referrerPolicy="no-referrer"
+                      onError={() => setImageLoadFailed(true)}
+                      className="w-10 h-10 rounded-full object-cover shrink-0 border border-slate-200"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#00A843] text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
+                      {currentUser.name
+                        ? currentUser.name.charAt(0).toUpperCase()
+                        : 'O'}
+                    </div>
+                  )}
+
+                  {/* Sender details and Expandable 'to me / to [Recipient Name]' row */}
+                  <div className="space-y-0.5">
+                    {/* First line: Name and <email> */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        style={{
+                          fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                          fontSize: '15px',
+                          letterSpacing: '-0.2px',
+                        }}
+                        className="font-bold text-slate-900"
+                      >
+                        {currentUser.name || 'Oliver Brown'}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                          fontSize: '13.5px',
+                          letterSpacing: '-0.15px',
+                        }}
+                        className="text-slate-500 font-normal"
+                      >
+                        &lt;{selectedEmail.sender?.email || currentUser.email || 'oliver.brown@domain.io'}&gt;
+                      </span>
+                    </div>
+
+                    {/* Second line: 'to [Recipient Name]' with expand arrow */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowRecipientDetails(!showRecipientDetails)}
+                        className="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-800 transition cursor-pointer py-0.5"
+                      >
+                        <span>to {formatRecipientName(selectedEmail.recipient)}</span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                            showRecipientDetails ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {/* Expanded Recipient Details popover / card */}
+                      {showRecipientDetails && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-30"
+                            onClick={() => setShowRecipientDetails(false)}
+                          />
+                          <div
+                            style={{
+                              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                              letterSpacing: '-0.15px',
+                            }}
+                            className="absolute left-0 top-full mt-1.5 p-3.5 bg-white border border-slate-200/90 rounded-xl shadow-xl w-80 text-xs space-y-2 z-40 animate-in fade-in zoom-in-95 duration-100"
+                          >
+                            <div className="grid grid-cols-[55px_1fr] gap-x-2 text-slate-600">
+                              <span className="text-slate-400 font-medium">from:</span>
+                              <span className="text-slate-800 font-semibold truncate">
+                                {currentUser.name} &lt;{selectedEmail.sender?.email || currentUser.email}&gt;
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-[55px_1fr] gap-x-2 text-slate-600">
+                              <span className="text-slate-400 font-medium">to:</span>
+                              <span className="text-slate-800 font-semibold truncate">
+                                {formatRecipientName(selectedEmail.recipient)} &lt;{selectedEmail.recipient}&gt;
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-[55px_1fr] gap-x-2 text-slate-600">
+                              <span className="text-slate-400 font-medium">date:</span>
+                              <span className="text-slate-700">
+                                {new Date(selectedEmail.sentAt || selectedEmail.scheduledAt).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-[55px_1fr] gap-x-2 text-slate-600">
+                              <span className="text-slate-400 font-medium">subject:</span>
+                              <span className="text-slate-700 truncate">{selectedEmail.subject}</span>
+                            </div>
+                            <div className="grid grid-cols-[55px_1fr] gap-x-2 text-slate-600">
+                              <span className="text-slate-400 font-medium">status:</span>
+                              <span className="inline-block text-[#00A843] font-semibold">
+                                {selectedEmail.status}
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">
@@ -1136,7 +1566,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Message text */}
+              {/* Message text with rich-preview styling */}
               <div
                 style={{
                   fontFamily: "var(--font-inter), 'Inter', sans-serif",
@@ -1144,7 +1574,7 @@ export default function DashboardPage() {
                   letterSpacing: '-0.15px',
                   lineHeight: '160%',
                 }}
-                className="text-slate-800 pt-2 space-y-4"
+                className="text-slate-800 pt-1 space-y-4"
               >
                 <div
                   style={{
@@ -1153,7 +1583,7 @@ export default function DashboardPage() {
                     letterSpacing: '-0.15px',
                     lineHeight: '160%',
                   }}
-                  className="whitespace-pre-wrap text-slate-700 bg-[#F9FBFA] p-6 rounded-2xl border border-slate-100/80 shadow-[0_1px_4px_rgba(0,0,0,0.02)]"
+                  className="rich-preview text-slate-700 bg-[#F9FBFA] p-6 rounded-2xl border border-slate-100/80 shadow-[0_1px_4px_rgba(0,0,0,0.02)]"
                   dangerouslySetInnerHTML={{
                     __html: selectedEmail.body || 'No message content.',
                   }}
@@ -1189,7 +1619,7 @@ export default function DashboardPage() {
               fontFamily: "var(--font-inter), 'Inter', sans-serif",
               letterSpacing: '-0.15px',
             }}
-            className="flex-1 flex flex-col relative bg-white"
+            className="flex-1 flex flex-col h-full overflow-y-auto relative bg-white"
           >
             {/* Header: Compose New Email + Action icons + Green "Send Later" button */}
             <div className="px-10 pt-7 pb-5 flex items-center justify-between">
@@ -1313,8 +1743,7 @@ export default function DashboardPage() {
                   }}
                   className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#F5F7F6] font-medium text-slate-800"
                 >
-                  <span>oliver.brown@domain.io</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{currentUser.email || 'user@reachinbox.ai'}</span>
                 </div>
               </div>
 
@@ -1546,63 +1975,45 @@ export default function DashboardPage() {
 
                 <span className="w-px h-4 bg-slate-200 mx-1"></span>
 
-                {/* Text Size Slider Button & Popover */}
+                {/* Text Size Dropdown */}
                 <div className="relative inline-flex items-center">
                   <button
                     type="button"
-                    onClick={() => setShowTextSizeSlider(!showTextSizeSlider)}
+                    onMouseDown={(e) => { e.preventDefault(); setShowTextSizeSlider(!showTextSizeSlider); }}
                     className={`p-1.5 rounded-md transition font-medium flex items-center gap-1 ${
                       showTextSizeSlider || textSize !== 14
                         ? 'bg-[#E5F5EB] text-[#00A843] font-bold ring-1 ring-[#00A843]/30'
                         : 'hover:text-slate-900 hover:bg-slate-200/60 text-slate-600'
                     }`}
-                    title="Change font size (slider)"
+                    title="Change font size"
                   >
                     <Type className="w-3.5 h-3.5" />
-                    <span className="text-[11px] font-semibold">{textSize}px</span>
+                    <span className="text-[11px] font-semibold w-6 text-center">{textSize}</span>
+                    <ChevronDown className="w-2.5 h-2.5 opacity-60" />
                   </button>
 
-                  {/* Font Size Slider Popover */}
+                  {/* Font Size Dropdown Popover */}
                   {showTextSizeSlider && (
                     <div
                       onMouseDown={(e) => e.stopPropagation()}
-                      className="absolute bottom-9 left-0 z-30 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] p-3 w-56 space-y-2.5"
+                      className="absolute bottom-full mb-1 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.14)] overflow-hidden w-28"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-slate-800">Font Size</span>
-                        <span className="text-xs font-bold text-[#00A843] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          {textSize}px
-                        </span>
+                      <div className="px-3 py-2 bg-[#F8FAF9] border-b border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Font Size</span>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-400 font-medium">10</span>
-                        <input
-                          type="range"
-                          min="10"
-                          max="36"
-                          step="1"
-                          value={textSize}
-                          onChange={(e) => applyExactFontSize(parseInt(e.target.value, 10))}
-                          className="w-full accent-[#00A843] cursor-pointer"
-                        />
-                        <span className="text-[10px] text-slate-400 font-medium">36</span>
-                      </div>
-
-                      {/* Quick preset pills */}
-                      <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-100">
-                        {[12, 14, 16, 20, 24].map((px) => (
+                      <div className="py-1 max-h-48 overflow-y-auto">
+                        {[10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32, 36].map((px) => (
                           <button
                             key={px}
                             type="button"
-                            onClick={() => applyExactFontSize(px)}
-                            className={`px-2 py-0.5 text-[10px] rounded-md transition ${
+                            onMouseDown={(e) => { e.preventDefault(); applyExactFontSize(px); setShowTextSizeSlider(false); }}
+                            className={`w-full text-left px-3 py-1.5 text-[13px] transition ${
                               textSize === px
-                                ? 'bg-[#00A843] text-white font-bold'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                ? 'bg-[#E5F5EB] text-[#00A843] font-semibold'
+                                : 'text-slate-700 hover:bg-slate-50'
                             }`}
                           >
-                            {px}
+                            {px}px
                           </button>
                         ))}
                       </div>
@@ -1884,146 +2295,293 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Send Later Popover Modal (Matching Figma Screen 5 top right) */}
-            {showSendLater && (
-              <div
-                style={{
-                  fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                  letterSpacing: '-0.15px',
-                }}
-                className="absolute top-16 right-8 w-72 bg-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] border border-slate-100 p-5 space-y-4 z-20"
-              >
-                <h3
-                  style={{
-                    fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                    fontSize: '14px',
-                    letterSpacing: '-0.15px',
-                  }}
-                  className="font-bold text-slate-900"
-                >
-                  Send Later
-                </h3>
+            {/* Send Later Modal — Custom date + time picker */}
+            {showSendLater && (() => {
+              const now = new Date();
+              const parseSelected = scheduledDateStr ? new Date(scheduledDateStr) : null;
 
-                <div className="relative">
-                  <div
-                    onClick={() => {
-                      const input = document.getElementById('scheduled-datetime-input') as HTMLInputElement | null;
-                      if (input) {
-                        if (typeof input.showPicker === 'function') {
-                          input.showPicker();
-                        } else {
-                          input.focus();
-                        }
-                      }
-                    }}
-                    style={{
-                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                      fontSize: '13px',
-                      letterSpacing: '-0.15px',
-                    }}
-                    className="w-full h-9 px-3 bg-[#F5F7F6] text-slate-800 rounded-lg border border-slate-200 flex items-center justify-between cursor-pointer hover:border-slate-300 transition"
-                  >
-                    <span className={scheduledDateStr ? 'text-slate-800 font-medium' : 'text-slate-400'}>
-                      {scheduledDateStr ? new Date(scheduledDateStr).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pick date & time'}
-                    </span>
-                    <Calendar className="w-4 h-4 text-slate-400" />
-                  </div>
-                  <input
-                    id="scheduled-datetime-input"
-                    type="datetime-local"
-                    value={scheduledDateStr}
-                    onChange={(e) => setScheduledDateStr(e.target.value)}
-                    className="sr-only"
-                  />
-                </div>
+              // Build mini-calendar state from selected or today
+              const calBase = parseSelected || now;
+              const calYear = calBase.getFullYear();
+              const calMonth = calBase.getMonth();
+              const calDay = parseSelected ? parseSelected.getDate() : now.getDate();
+              const selHour = parseSelected ? parseSelected.getHours() : (now.getHours() + 1) % 24;
+              const selMinute = parseSelected ? parseSelected.getMinutes() : 0;
 
+              const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+              const firstDow = new Date(calYear, calMonth, 1).getDay();
+              const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+              const applyDate = (y: number, mo: number, d: number, h: number, m: number) => {
+                const dt = new Date(y, mo, d, h, m);
+                const pad = (n: number) => String(n).padStart(2, '0');
+                setScheduledDateStr(`${y}-${pad(mo + 1)}-${pad(d)}T${pad(h)}:${pad(m)}`);
+              };
+
+              return (
                 <div
                   style={{
                     fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                    fontSize: '14px',
                     letterSpacing: '-0.15px',
                   }}
-                  className="space-y-2 text-slate-600"
+                  className="absolute top-16 right-8 w-80 bg-white rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.14)] border border-slate-100 z-30 overflow-hidden"
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
-                      setScheduledDateStr(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-                    }}
-                    className="w-full text-left py-1 hover:text-slate-900 transition"
-                  >
-                    Tomorrow
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date();
-                      d.setDate(d.getDate() + 1);
-                      d.setHours(10, 0, 0, 0);
-                      setScheduledDateStr(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-                    }}
-                    className="w-full text-left py-1 hover:text-slate-900 transition"
-                  >
-                    Tomorrow, 10:00 AM
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date();
-                      d.setDate(d.getDate() + 1);
-                      d.setHours(11, 0, 0, 0);
-                      setScheduledDateStr(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-                    }}
-                    className="w-full text-left py-1 hover:text-slate-900 transition"
-                  >
-                    Tomorrow, 11:00 AM
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date();
-                      d.setDate(d.getDate() + 1);
-                      d.setHours(15, 0, 0, 0);
-                      setScheduledDateStr(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-                    }}
-                    className="w-full text-left py-1 hover:text-slate-900 transition"
-                  >
-                    Tomorrow, 3:00 PM
-                  </button>
-                </div>
+                  {/* Header */}
+                  <div className="px-5 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between">
+                    <h3 style={{ fontSize: '14px', letterSpacing: '-0.15px' }} className="font-bold text-slate-900">Schedule Send</h3>
+                    <button
+                      onClick={() => setShowSendLater(false)}
+                      className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScheduledDateStr('');
-                      setShowSendLater(false);
-                    }}
-                    style={{
-                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                      fontSize: '13px',
-                      letterSpacing: '-0.15px',
-                    }}
-                    className="px-3 py-1.5 text-slate-500 hover:text-slate-800 transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowSendLater(false)}
-                    style={{
-                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                      fontSize: '14px',
-                      letterSpacing: '-0.15px',
-                    }}
-                    className="px-4 py-1.5 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E8F5E9]/50 font-semibold transition"
-                  >
-                    Done
-                  </button>
+                  <div className="p-4 space-y-4">
+                    {/* Quick options */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: 'Tomorrow 9 AM', h: 9, m: 0, offset: 1 },
+                        { label: 'Tomorrow 12 PM', h: 12, m: 0, offset: 1 },
+                        { label: 'In 2 days 9 AM', h: 9, m: 0, offset: 2 },
+                        { label: 'Next Monday 9 AM', h: 9, m: 0, offset: (() => { const d = new Date(); const dow = d.getDay(); return (dow === 0 ? 1 : 8 - dow); })() },
+                      ].map((opt) => {
+                        const d = new Date(); d.setDate(d.getDate() + opt.offset); d.setHours(opt.h, opt.m, 0, 0);
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        const val = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(opt.h)}:${pad(opt.m)}`;
+                        const isActive = scheduledDateStr === val;
+                        return (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            onClick={() => setScheduledDateStr(val)}
+                            style={{ fontSize: '12px', letterSpacing: '-0.1px' }}
+                            className={`px-2.5 py-2 rounded-xl border text-left font-medium transition ${
+                              isActive
+                                ? 'bg-[#E5F5EB] border-[#00A843] text-[#00A843]'
+                                : 'bg-[#F8FAF9] border-slate-100 text-slate-700 hover:border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-px bg-slate-100" />
+                      <span style={{ fontSize: '11px' }} className="text-slate-400 font-medium uppercase tracking-wider">Or pick custom</span>
+                      <div className="flex-1 h-px bg-slate-100" />
+                    </div>
+
+                    {/* Mini Calendar */}
+                    <div>
+                      {/* Month nav */}
+                      <div className="flex items-center justify-between mb-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const d = new Date(calYear, calMonth - 1, 1);
+                            applyDate(d.getFullYear(), d.getMonth(), 1, selHour, selMinute);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 9L4.5 6L7.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </button>
+                        <span style={{ fontSize: '13px', fontWeight: 600 }} className="text-slate-800">
+                          {monthNames[calMonth]} {calYear}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const d = new Date(calYear, calMonth + 1, 1);
+                            applyDate(d.getFullYear(), d.getMonth(), 1, selHour, selMinute);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </button>
+                      </div>
+                      {/* Day-of-week headers */}
+                      <div className="grid grid-cols-7 mb-1">
+                        {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+                          <div key={d} style={{ fontSize: '10px' }} className="text-center font-semibold text-slate-400 py-0.5">{d}</div>
+                        ))}
+                      </div>
+                      {/* Day cells */}
+                      <div className="grid grid-cols-7 gap-y-0.5">
+                        {Array.from({ length: firstDow }).map((_, i) => <div key={`e-${i}`} />)}
+                        {Array.from({ length: daysInMonth }).map((_, i) => {
+                          const day = i + 1;
+                          const isToday = day === now.getDate() && calMonth === now.getMonth() && calYear === now.getFullYear();
+                          const isSelected = day === calDay;
+                          const isPast = new Date(calYear, calMonth, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              disabled={isPast}
+                              onClick={() => applyDate(calYear, calMonth, day, selHour, selMinute)}
+                              style={{ fontSize: '12px' }}
+                              className={`h-7 w-full rounded-lg font-medium transition ${
+                                isSelected
+                                  ? 'bg-[#00A843] text-white shadow-sm'
+                                  : isToday
+                                  ? 'border border-[#00A843] text-[#00A843]'
+                                  : isPast
+                                  ? 'text-slate-300 cursor-not-allowed'
+                                  : 'text-slate-700 hover:bg-[#E5F5EB]'
+                              }`}
+                            >
+                              {day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Time picker — 12-hour compact steppers */}
+                    {(() => {
+                      const isPM = selHour >= 12;
+                      const display12 = selHour % 12 || 12; // 0→12, 13→1, etc.
+
+                      const stepHourUp = () => {
+                        const next12 = (display12 % 12) + 1; // 12→1, 1→2, ..., 11→12
+                        const next24 = isPM ? (next12 === 12 ? 12 : next12 + 12) : (next12 === 12 ? 0 : next12);
+                        applyDate(calYear, calMonth, calDay, next24, selMinute);
+                      };
+                      const stepHourDown = () => {
+                        const prev12 = ((display12 - 2 + 12) % 12) + 1; // 1→12, 12→11, etc.
+                        const prev24 = isPM ? (prev12 === 12 ? 12 : prev12 + 12) : (prev12 === 12 ? 0 : prev12);
+                        applyDate(calYear, calMonth, calDay, prev24, selMinute);
+                      };
+                      const commitHour = (raw: string) => {
+                        const n = parseInt(raw.replace(/\D/g, '') || '0', 10);
+                        const clamped = Math.min(12, Math.max(1, n));
+                        const h24 = isPM ? (clamped === 12 ? 12 : clamped + 12) : (clamped === 12 ? 0 : clamped);
+                        applyDate(calYear, calMonth, calDay, h24, selMinute);
+                      };
+                      const commitMinute = (raw: string) => {
+                        const n = parseInt(raw.replace(/\D/g, '') || '0', 10);
+                        applyDate(calYear, calMonth, calDay, selHour, Math.min(59, Math.max(0, n)));
+                      };
+
+                      return (
+                        <div className="flex items-center justify-center gap-2 pt-2 pb-0.5">
+
+                          {/* Hour stepper */}
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button type="button" onClick={stepHourUp}
+                              className="w-12 h-5 flex items-center justify-center rounded-md text-slate-400 hover:text-[#00A843] hover:bg-[#E5F5EB]/60 transition">
+                              <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2.5 7.5L6 4L9.5 7.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </button>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={2}
+                              defaultValue={String(display12).padStart(2, '0')}
+                              key={display12}
+                              onFocus={(e) => e.target.select()}
+                              onBlur={(e) => commitHour(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowUp') { e.preventDefault(); stepHourUp(); }
+                                if (e.key === 'ArrowDown') { e.preventDefault(); stepHourDown(); }
+                                if (e.key === 'Enter') { commitHour((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).blur(); }
+                              }}
+                              style={{ fontSize: '17px', fontWeight: 800, letterSpacing: '-0.3px', width: '52px', height: '38px', textAlign: 'center' }}
+                              className="bg-[#F8FAF9] border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-[#00A843] focus:ring-2 focus:ring-[#00A843]/20 transition cursor-text"
+                            />
+                            <button type="button" onClick={stepHourDown}
+                              className="w-12 h-5 flex items-center justify-center rounded-md text-slate-400 hover:text-[#00A843] hover:bg-[#E5F5EB]/60 transition">
+                              <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </button>
+                          </div>
+
+                          {/* Separator */}
+                          <span style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1 }} className="text-slate-200 select-none mb-0.5">:</span>
+
+                          {/* Minute stepper */}
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button type="button" onClick={() => applyDate(calYear, calMonth, calDay, selHour, (selMinute + 1) % 60)}
+                              className="w-12 h-5 flex items-center justify-center rounded-md text-slate-400 hover:text-[#00A843] hover:bg-[#E5F5EB]/60 transition">
+                              <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2.5 7.5L6 4L9.5 7.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </button>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={2}
+                              defaultValue={String(selMinute).padStart(2, '0')}
+                              key={selMinute}
+                              onFocus={(e) => e.target.select()}
+                              onBlur={(e) => commitMinute(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowUp') { e.preventDefault(); applyDate(calYear, calMonth, calDay, selHour, (selMinute + 1) % 60); }
+                                if (e.key === 'ArrowDown') { e.preventDefault(); applyDate(calYear, calMonth, calDay, selHour, (selMinute - 1 + 60) % 60); }
+                                if (e.key === 'Enter') { commitMinute((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).blur(); }
+                              }}
+                              style={{ fontSize: '17px', fontWeight: 800, letterSpacing: '-0.3px', width: '52px', height: '38px', textAlign: 'center' }}
+                              className="bg-[#F8FAF9] border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-[#00A843] focus:ring-2 focus:ring-[#00A843]/20 transition cursor-text"
+                            />
+                            <button type="button" onClick={() => applyDate(calYear, calMonth, calDay, selHour, (selMinute - 1 + 60) % 60)}
+                              className="w-12 h-5 flex items-center justify-center rounded-md text-slate-400 hover:text-[#00A843] hover:bg-[#E5F5EB]/60 transition">
+                              <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </button>
+                          </div>
+
+                          {/* AM / PM toggle */}
+                          <div className="flex flex-col gap-1 ml-1">
+                            <button type="button"
+                              onClick={() => { if (isPM) applyDate(calYear, calMonth, calDay, selHour - 12, selMinute); }}
+                              style={{ fontSize: '11px', fontWeight: 700 }}
+                              className={`px-2.5 py-1 rounded-lg transition ${!isPM ? 'bg-[#00A843] text-white shadow-sm' : 'text-slate-400 hover:bg-slate-100'}`}>
+                              AM
+                            </button>
+                            <button type="button"
+                              onClick={() => { if (!isPM) applyDate(calYear, calMonth, calDay, selHour + 12, selMinute); }}
+                              style={{ fontSize: '11px', fontWeight: 700 }}
+                              className={`px-2.5 py-1 rounded-lg transition ${isPM ? 'bg-[#00A843] text-white shadow-sm' : 'text-slate-400 hover:bg-slate-100'}`}>
+                              PM
+                            </button>
+                          </div>
+
+                        </div>
+                      );
+                    })()}
+
+                    {/* Selected summary */}
+                    {scheduledDateStr && (
+                      <div style={{ fontSize: '12px' }} className="flex items-center gap-2 bg-[#E5F5EB] border border-[#C8E6C9] px-3 py-2 rounded-xl text-[#1B5E20]">
+                        <Calendar className="w-3.5 h-3.5 shrink-0" />
+                        <span className="font-medium">
+                          {new Date(scheduledDateStr).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-4 pb-4 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setScheduledDateStr(''); setShowSendLater(false); }}
+                      style={{ fontSize: '13px' }}
+                      className="px-3 py-1.5 text-slate-500 hover:text-slate-800 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSendLater(false)}
+                      style={{ fontSize: '13px' }}
+                      className="px-4 py-1.5 rounded-full bg-[#00A843] text-white font-semibold hover:bg-[#008a37] transition shadow-sm"
+                    >
+                      Confirm
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
       </main>
