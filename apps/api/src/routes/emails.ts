@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/db';
 import { requireAuth } from '../middleware/auth';
 import { AppError } from '../utils/errors';
+import { SearchService } from '../integrations/elasticsearch/search.service';
 
 const router = Router();
 
@@ -20,10 +21,16 @@ router.get('/scheduled', requireAuth, async (req: Request, res: Response, next: 
     };
 
     if (search) {
-      where.OR = [
-        { recipient: { contains: search } },
-        { subject: { contains: search } },
-      ];
+      // First attempt Elasticsearch query
+      const esMatchingIds = await SearchService.searchEmailJobs(search, authUser.id);
+      if (esMatchingIds && esMatchingIds.length > 0) {
+        where.id = { in: esMatchingIds };
+      } else {
+        where.OR = [
+          { recipient: { contains: search } },
+          { subject: { contains: search } },
+        ];
+      }
     }
 
     const [emails, total] = await Promise.all([
@@ -79,10 +86,16 @@ router.get('/sent', requireAuth, async (req: Request, res: Response, next: NextF
     };
 
     if (search) {
-      where.OR = [
-        { recipient: { contains: search } },
-        { subject: { contains: search } },
-      ];
+      // First attempt Elasticsearch query
+      const esMatchingIds = await SearchService.searchEmailJobs(search, authUser.id);
+      if (esMatchingIds && esMatchingIds.length > 0) {
+        where.id = { in: esMatchingIds };
+      } else {
+        where.OR = [
+          { recipient: { contains: search } },
+          { subject: { contains: search } },
+        ];
+      }
     }
 
     const [emails, total] = await Promise.all([

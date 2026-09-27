@@ -808,9 +808,53 @@ export default function DashboardPage() {
               }}
               className="flex-1 overflow-y-auto space-y-1"
             >
-              {emails.length === 0 ? (
-                <div className="p-16 text-center text-slate-400 text-xs">
-                  No {activeTab} emails found. Click <b>Compose</b> to schedule!
+              {loading ? (
+                <div className="space-y-3 px-6 py-4">
+                  {[1, 2, 3, 4, 5].map((idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between px-8 py-4 bg-white/70 rounded-xl border border-slate-100 animate-pulse"
+                    >
+                      <div className="flex items-center gap-6 flex-1">
+                        <div className="w-36 h-4 bg-slate-200/70 rounded-md" />
+                        <div className="w-28 h-6 bg-slate-200/50 rounded-full" />
+                        <div className="w-64 h-4 bg-slate-200/60 rounded-md" />
+                      </div>
+                      <div className="w-4 h-4 bg-slate-200/70 rounded-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : emails.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-20 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-[#E5F5EB] flex items-center justify-center text-[#00A843] mb-1 shadow-sm">
+                    {activeTab === 'scheduled' ? (
+                      <Clock className="w-6 h-6 stroke-[1.75]" />
+                    ) : (
+                      <Send className="w-6 h-6 stroke-[1.75]" />
+                    )}
+                  </div>
+                  <h4
+                    style={{
+                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                      fontSize: '15px',
+                      letterSpacing: '-0.15px',
+                    }}
+                    className="font-semibold text-slate-800"
+                  >
+                    No {activeTab} emails
+                  </h4>
+                  <p
+                    style={{
+                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                      fontSize: '13px',
+                      letterSpacing: '-0.15px',
+                    }}
+                    className="text-slate-400 max-w-xs leading-relaxed"
+                  >
+                    {activeTab === 'scheduled'
+                      ? 'No queued messages waiting to be dispatched. Hit Compose to schedule a new campaign.'
+                      : 'No sent email delivery records recorded yet.'}
+                  </p>
                 </div>
               ) : (
                 emails.map((email) => (

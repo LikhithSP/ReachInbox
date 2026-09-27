@@ -52,7 +52,8 @@ export class SchedulerService {
   }
 
   /**
-   * Schedule all email jobs for a campaign.
+   * Schedule all email jobs for a campaign with high-throughput bulk enqueuing.
+   * Handles 1000+ jobs instantly via BullMQ addBulk.
    */
   public static async scheduleCampaign(campaignId: string) {
     const emailJobs = await prisma.emailJob.findMany({
@@ -63,18 +64,53 @@ export class SchedulerService {
       orderBy: { scheduledAt: 'asc' },
     });
 
-    for (const job of emailJobs) {
-      await this.scheduleEmailJob({
+    if (emailJobs.length === 0) return 0;
+
+    const now = Date.now();
+    const bulkJobs = emailJobs.map((job) => {
+      const scheduledTime = job.scheduledAt.getTime();
+      const delay = Math.max(0, scheduledTime - now);
+      const bullJobId = `job_${job.idempotencyKey}`;
+
+      const payload: EmailJobQueuePayload = {
         emailJobId: job.id,
         campaignId: job.campaignId,
         senderId: job.senderId,
         recipient: job.recipient,
         subject: job.subject,
         body: job.body,
-        scheduledAt: job.scheduledAt,
+        scheduledAt: job.scheduledAt.toISOString(),
         idempotencyKey: job.idempotencyKey,
+      };
+
+      return {
+        name: 'send-email',
+        data: payload,
+        opts: {
+          delay,
+          jobId: bullJobId,
+        },
+      };
+    });
+
+    // Bulk enqueue into BullMQ
+    const enqueued = await emailQueue.addBulk(bulkJobs);
+
+    // Update MySQL jobs with their assigned BullMQ IDs in batches
+    const updatePromises = emailJobs.map((job, idx) => {
+      const queueJob = enqueued[idx];
+      const scheduledTime = job.scheduledAt.getTime();
+      const delay = Math.max(0, scheduledTime - now);
+      return prisma.emailJob.update({
+        where: { id: job.id },
+        data: {
+          bullJobId: queueJob?.id || `job_${job.idempotencyKey}`,
+          status: delay > 0 ? 'SCHEDULED' : 'QUEUED',
+        },
       });
-    }
+    });
+
+    await Promise.all(updatePromises);
 
     return emailJobs.length;
   }
