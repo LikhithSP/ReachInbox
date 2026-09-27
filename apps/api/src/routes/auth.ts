@@ -130,27 +130,55 @@ router.get('/me', requireAuth, (req: Request, res: Response) => {
   });
 });
 
-// POST /api/v1/auth/dev-login (facilitates testing & demo without Google credentials)
-router.post('/dev-login', (req: Request, res: Response) => {
-  const { email, name } = req.body || {};
-  const user = {
-    id: 'usr_demo_likhith',
-    googleId: 'google_demo_1092830192',
-    email: email || 'splikith04@gmail.com',
-    name: name || 'Likhith S P',
-    avatarUrl: 'https://avatar.vercel.sh/likhith'
-  };
-  (req.session as any).user = user;
-  res.json(user);
+// POST /api/v1/auth/dev-login (facilitates testing & demo)
+router.post('/dev-login', async (req: Request, res: Response, next) => {
+  try {
+    const { email, name } = req.body || {};
+    const userEmail = email || 'splikith04@gmail.com';
+    const userName = name || 'Likhith S P';
+
+    const dbUser = await prisma.user.upsert({
+      where: { email: userEmail },
+      update: { name: userName },
+      create: {
+        email: userEmail,
+        googleId: `dev_${Date.now()}`,
+        name: userName,
+        avatarUrl: `https://avatar.vercel.sh/${encodeURIComponent(userName)}`,
+        senders: {
+          create: {
+            email: userEmail,
+            provider: 'ethereal',
+          },
+        },
+      },
+      include: { senders: true },
+    });
+
+    const user = {
+      id: dbUser.id,
+      googleId: dbUser.googleId,
+      email: dbUser.email,
+      name: dbUser.name,
+      avatarUrl: dbUser.avatarUrl,
+    };
+
+    (req.session as any).user = user;
+    req.session.save((err) => {
+      if (err) {
+        console.warn('Session save error:', err);
+      }
+      res.json(user);
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // POST /api/v1/auth/logout
 router.post('/logout', (req: Request, res: Response) => {
   if (req.session) {
     req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ error: { code: 'LOGOUT_FAILED', message: 'Could not log out' } });
-      }
       res.clearCookie('connect.sid');
       return res.json({ success: true, message: 'Logged out successfully' });
     });
