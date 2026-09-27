@@ -31,6 +31,7 @@ import {
   Table,
   Strikethrough,
   ExternalLink,
+  Upload,
 } from 'lucide-react';
 
 interface EmailItem {
@@ -60,7 +61,16 @@ export default function DashboardPage() {
   const [selectedEmail, setSelectedEmail] = useState<EmailItem | null>(null);
 
   // Compose form states
-  const [composeTo, setComposeTo] = useState('recipient@example.com');
+  const [recipientTags, setRecipientTags] = useState<string[]>([
+    'tame@jmail.com',
+    'lame@jmail.com',
+    'dame@jmail.com',
+    'fame@jmail.com',
+    'game@jmail.com',
+    'name@jmail.com',
+    'same@jmail.com',
+  ]);
+  const [newRecipientInput, setNewRecipientInput] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
   const [delaySeconds, setDelaySeconds] = useState('00');
@@ -70,6 +80,26 @@ export default function DashboardPage() {
   const [showSendLater, setShowSendLater] = useState(false);
   const [scheduledDateStr, setScheduledDateStr] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // File upload handler for CSV/TXT recipient lists
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        const matches = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+        if (matches && matches.length > 0) {
+          const uniqueNew = Array.from(new Set([...recipientTags, ...matches]));
+          setRecipientTags(uniqueNew);
+        }
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Fetch emails from API and sync exact counts
   const fetchEmails = async () => {
@@ -132,9 +162,12 @@ export default function DashboardPage() {
   const handleSendOrSchedule = async (isScheduled: boolean) => {
     setSubmitting(true);
     try {
-      const recipients = composeTo
-        .split(/[\n,]+/)
-        .map((r) => r.trim())
+      const allEmails = [...recipientTags];
+      if (newRecipientInput.trim() && !allEmails.includes(newRecipientInput.trim())) {
+        allEmails.push(newRecipientInput.trim());
+      }
+
+      const recipients = allEmails
         .filter((r) => r.length > 0)
         .map((email) => ({ email }));
 
@@ -487,9 +520,9 @@ export default function DashboardPage() {
                 <button
                   onClick={() => handleSendOrSchedule(false)}
                   disabled={submitting}
-                  className="px-6 py-1.5 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E8F5E9]/50 text-xs font-semibold transition"
+                  className="px-5 py-1.5 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E8F5E9]/50 text-xs font-semibold transition"
                 >
-                  {submitting ? 'Sending...' : 'Send'}
+                  {submitting ? 'Sending...' : 'Send Later'}
                 </button>
               </div>
             </div>
@@ -505,16 +538,70 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* To */}
-              <div className="flex items-center gap-6 border-b border-slate-100 pb-3">
-                <label className="text-xs text-slate-500 w-12 font-medium">To</label>
-                <input
-                  type="text"
-                  placeholder="recipient@example.com"
-                  value={composeTo}
-                  onChange={(e) => setComposeTo(e.target.value)}
-                  className="flex-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
-                />
+              {/* To matching Figma: Pill tags + +N badge + Upload List button */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 gap-4">
+                <div className="flex items-center gap-6 flex-1 min-w-0">
+                  <label className="text-xs text-slate-500 w-12 font-medium shrink-0">To</label>
+                  <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                    {recipientTags.slice(0, 3).map((email, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#E8F5E9] text-[#1B5E20] border border-[#C8E6C9] group"
+                      >
+                        <span>{email}</span>
+                        <button
+                          type="button"
+                          onClick={() => setRecipientTags(recipientTags.filter((_, i) => i !== idx))}
+                          className="text-[#1B5E20]/60 hover:text-[#1B5E20] text-[10px] font-bold leading-none p-0.5"
+                          title="Remove email"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+
+                    {recipientTags.length > 3 && (
+                      <button
+                        type="button"
+                        onClick={() => alert(`Recipients (${recipientTags.length}):\n\n` + recipientTags.join('\n'))}
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold text-[#1B5E20] border border-[#C8E6C9] bg-[#E8F5E9] hover:bg-[#C8E6C9] transition cursor-pointer"
+                        title="Click to view all recipients"
+                      >
+                        +{recipientTags.length - 3}
+                      </button>
+                    )}
+
+                    <input
+                      type="text"
+                      placeholder="Add email..."
+                      value={newRecipientInput}
+                      onChange={(e) => setNewRecipientInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newRecipientInput.trim()) {
+                          e.preventDefault();
+                          const val = newRecipientInput.trim();
+                          if (!recipientTags.includes(val)) {
+                            setRecipientTags([...recipientTags, val]);
+                          }
+                          setNewRecipientInput('');
+                        }
+                      }}
+                      className="text-xs text-slate-800 placeholder-slate-400 focus:outline-none min-w-[100px] flex-1 bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Upload List CTA button matching Figma */}
+                <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-[#00A843] hover:text-[#008f39] font-medium shrink-0 px-2 py-1 rounded-lg hover:bg-emerald-50 transition">
+                  <Upload className="w-3.5 h-3.5 text-[#00A843]" />
+                  <span>Upload List</span>
+                  <input
+                    type="file"
+                    accept=".csv,.txt"
+                    onChange={handleCsvUpload}
+                    className="hidden"
+                  />
+                </label>
               </div>
 
               {/* Subject */}
