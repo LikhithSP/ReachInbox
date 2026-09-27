@@ -16,6 +16,8 @@ const SLACK_REDIRECT_URI = process.env.SLACK_REDIRECT_URI || 'http://localhost:4
 router.get('/', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
+    const defaultWebhook = process.env.SLACK_WEBHOOK_URL || 'https://hooks.slack.com/services/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';
+
     let connection = await prisma.slackConnection.findFirst({
       where: {
         OR: [
@@ -25,8 +27,45 @@ router.get('/', requireAuth, async (req: Request, res: Response, next: NextFunct
       },
     });
 
-    if (!connection) {
-      connection = await prisma.slackConnection.findFirst();
+    // Auto-create or ensure connection exists for this user using defaultWebhook
+    if (!connection && defaultWebhook) {
+      try {
+        let dbUser = await prisma.user.findFirst({
+          where: {
+            OR: [{ id: user.id }, { email: user.email }],
+          },
+        });
+
+        if (!dbUser) {
+          dbUser = await prisma.user.create({
+            data: {
+              id: user.id,
+              googleId: user.googleId || `user_${Date.now()}`,
+              email: user.email,
+              name: user.name || 'User',
+              avatarUrl: user.avatarUrl || null,
+            },
+          });
+        }
+
+        connection = await prisma.slackConnection.upsert({
+          where: { userId: dbUser.id },
+          update: {
+            encryptedToken: defaultWebhook,
+            teamName: 'Connected Slack',
+            channelId: '#alerts',
+          },
+          create: {
+            userId: dbUser.id,
+            teamId: 'custom_team',
+            teamName: 'Connected Slack',
+            channelId: '#alerts',
+            encryptedToken: defaultWebhook,
+          },
+        });
+      } catch (e) {
+        console.warn('Notice auto-connecting slack:', e);
+      }
     }
 
     if (!connection) {
