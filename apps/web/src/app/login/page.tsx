@@ -28,11 +28,12 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg('');
 
+    if (!email.trim() || !password) {
+      setErrorMsg('Please enter both email and password');
+      return;
+    }
+
     if (isSignUp) {
-      if (!email.trim() || !password) {
-        setErrorMsg('Please enter both email and password');
-        return;
-      }
       if (password !== confirmPassword) {
         setErrorMsg('Passwords do not match');
         return;
@@ -45,23 +46,27 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:4000/api/v1/auth/dev-login', {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const res = await fetch(`${apiUrl}/api/v1/auth/dev-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          email: email.trim() || 'oliver.brown@domain.io',
+          email: email.trim(),
           name: name.trim() || (email.split('@')[0] ? email.split('@')[0].replace(/[._-]/g, ' ') : 'User'),
+          isSignUp,
         }),
       });
 
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
         router.push('/dashboard');
       } else {
-        router.push('/dashboard');
+        setErrorMsg(data.message || 'Authentication failed. Please verify your credentials.');
       }
     } catch {
-      router.push('/dashboard');
+      setErrorMsg('Unable to connect to authentication server. Please try again.');
     } finally {
       setLoading(false);
     }

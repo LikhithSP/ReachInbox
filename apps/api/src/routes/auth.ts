@@ -148,30 +148,61 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/v1/auth/dev-login (facilitates testing & demo)
+// POST /api/v1/auth/dev-login (registered user authentication)
 router.post('/dev-login', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, name } = req.body || {};
-    const userEmail = email || 'splikith04@gmail.com';
-    const userName = name || 'Likhith S P';
+    const { email, name, isSignUp } = req.body || {};
 
-    const dbUser = await prisma.user.upsert({
-      where: { email: userEmail },
-      update: { name: userName },
-      create: {
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required',
+      });
+    }
+
+    const userEmail = email.trim().toLowerCase();
+
+    // Check if user already exists in the database
+    let dbUser = await prisma.user.findFirst({
+      where: {
         email: userEmail,
-        googleId: `dev_${Date.now()}`,
-        name: userName,
-        avatarUrl: `https://avatar.vercel.sh/${encodeURIComponent(userName)}`,
-        senders: {
-          create: {
-            email: userEmail,
-            provider: 'ethereal',
+      },
+    });
+
+    if (isSignUp) {
+      // If signing up, create user if not already existing
+      if (dbUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'An account with this email already exists. Please sign in.',
+        });
+      }
+
+      const userName = name?.trim() || (userEmail.split('@')[0] ? userEmail.split('@')[0].replace(/[._-]/g, ' ') : 'User');
+
+      dbUser = await prisma.user.create({
+        data: {
+          email: userEmail,
+          googleId: `local_${Date.now()}`,
+          name: userName,
+          avatarUrl: `https://avatar.vercel.sh/${encodeURIComponent(userName)}`,
+          senders: {
+            create: {
+              email: userEmail,
+              provider: 'ethereal',
+            },
           },
         },
-      },
-      include: { senders: true },
-    });
+      });
+    } else {
+      // If logging in: user MUST be registered
+      if (!dbUser) {
+        return res.status(401).json({
+          success: false,
+          message: 'No account found with this email. Please create an account first.',
+        });
+      }
+    }
 
     const user = {
       id: dbUser.id,
@@ -186,7 +217,7 @@ router.post('/dev-login', async (req: Request, res: Response, next: NextFunction
       if (err) {
         console.warn('Session save error:', err);
       }
-      res.json(user);
+      return res.json({ success: true, user });
     });
   } catch (err) {
     next(err);
