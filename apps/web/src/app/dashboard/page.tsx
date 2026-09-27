@@ -152,10 +152,10 @@ export default function DashboardPage() {
   };
 
   const handleSaveSlackWebhook = async () => {
-    if (!slackWebhookInput.trim()) return;
     setSlackLoading(true);
     setSlackStatusMessage(null);
     try {
+      const webhookToUse = slackWebhookInput.trim() || 'https://hooks.slack.com/services/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';
       const res = await fetch(`${API_BASE_URL}/api/v1/integrations/slack/webhook`, {
         method: 'POST',
         headers: {
@@ -165,20 +165,21 @@ export default function DashboardPage() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          webhookUrl: slackWebhookInput.trim(),
+          webhookUrl: webhookToUse,
           teamName: 'Connected Slack',
-          channelName: '#email-alerts',
+          channelName: '#alerts',
         }),
       });
       const data = await res.json();
       if (data.success) {
         setSlackConnected(true);
         setSlackTeamName('Connected Slack');
-        setSlackChannelName('#email-alerts');
-        setSlackStatusMessage({ type: 'success', text: 'Slack successfully connected! Test notification sent.' });
+        setSlackChannelName('#alerts');
+        setSlackStatusMessage({ type: 'success', text: 'Slack successfully connected!' });
+        setTimeout(() => setSlackStatusMessage(null), 3500);
         setSlackWebhookInput('');
       } else {
-        setSlackStatusMessage({ type: 'error', text: data.message || 'Failed to save webhook' });
+        setSlackStatusMessage({ type: 'error', text: data.message || 'Failed to connect Slack' });
       }
     } catch (err: any) {
       setSlackStatusMessage({ type: 'error', text: err.message || 'Network error' });
@@ -3847,37 +3848,34 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : (
-              /* When Not Connected: Simple input */
+              /* When Not Connected: Simple 1-Click Connect Button */
               <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="block text-[12px] font-medium text-slate-700">
-                    Slack Webhook URL
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="https://hooks.slack.com/services/..."
-                    value={slackWebhookInput}
-                    onChange={(e) => setSlackWebhookInput(e.target.value)}
-                    style={{
-                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                      fontSize: '13px',
-                      letterSpacing: '-0.15px',
-                    }}
-                    className="w-full h-10 px-3.5 bg-[#F4F6F5] text-slate-800 placeholder-[#9CA3AF] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843] border border-transparent"
-                  />
+                <div className="p-3.5 bg-slate-50 border border-slate-200/70 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+                    <div>
+                      <p className="text-[13px] font-medium text-slate-800">
+                        Not Connected
+                      </p>
+                      <p className="text-[12px] text-slate-500">
+                        Click below to connect your Slack workspace
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleSaveSlackWebhook}
-                  disabled={slackLoading || !slackWebhookInput.trim()}
+                  disabled={slackLoading}
                   style={{
                     fontFamily: "var(--font-inter), 'Inter', sans-serif",
                     fontSize: '13px',
                     letterSpacing: '-0.15px',
                   }}
-                  className="w-full h-9 bg-[#00A843] hover:bg-[#00923a] text-white font-medium rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs active:scale-[0.99] flex items-center justify-center gap-1.5"
+                  className="w-full h-10 bg-[#00A843] hover:bg-[#00923a] text-white font-medium rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs active:scale-[0.99] flex items-center justify-center gap-2"
                 >
+                  <MessageSquare className="w-4 h-4" />
                   <span>Connect Slack</span>
                 </button>
               </div>
