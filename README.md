@@ -1,8 +1,39 @@
 # ReachInbox Email Scheduler
 
+![Next.js](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js&logoColor=white)
+![React](https://img.shields.io/badge/React-18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
+![BullMQ](https://img.shields.io/badge/BullMQ-CC292B?style=for-the-badge&logo=redis&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
+![Elasticsearch](https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+
 A production-grade full-stack email scheduling and delivery management platform built with **Next.js 14**, **Express**, **TypeScript**, **BullMQ**, **Redis**, **MySQL/Prisma**, **Elasticsearch**, and **Nodemailer (Ethereal Email)**.
 
 Designed around **persistent asynchronous job processing**, ensuring scheduled emails survive application and worker restarts while enforcing per-sender concurrency, configurable inter-email delays, atomic hourly rate limits, idempotency, Slack notifications, search indexing, and real-time operational visibility.
+
+---
+
+## Product Previews
+
+### Dashboard & Scheduled List View
+![Dashboard Preview](previews/Dashboard.png)
+
+### Campaign & Email Composer (with CSV Leads & Preview)
+![Compose Email Preview](previews/Compose%20Email.png)
+
+### Real-Time Slack Rate-Limit Alerts Integration
+![Slack Notification Preview](previews/Slack%20Notification.png)
+
+### Custom BullMQ Observability Dashboard (`/admin/queues`)
+![BullMQ Dashboard Preview](previews/BullMQ%20Dashboard.png)
+
+### Authentication & Registered User Login
+![Login Screen Preview](previews/Login.png)
 
 ---
 
@@ -283,18 +314,3 @@ npm test
 | **API Healthcheck** | `http://localhost:4000/health` | Service and dependency connectivity check |
 | **BullMQ Dashboard** | `http://localhost:4000/admin/queues` | Queue metrics, delayed/active jobs, and manual retries |
 | **Ethereal Mailbox** | `https://ethereal.email/messages` | Web inbox to inspect all dispatched test emails |
-
----
-
-## Verification & Demo Checklist
-
-- [x] Sign in via Google OAuth or Developer Session
-- [x] Compose an email campaign with custom recipient variables (`firstName`, `company`)
-- [x] Upload CSV recipient list and verify client-side deduplication
-- [x] Schedule an email for a future time and verify it appears in the **Scheduled** tab
-- [x] Inspect delayed job in **BullMQ Dashboard** (`http://localhost:4000/admin/queues`)
-- [x] Stop and restart the API server to confirm **Persistence & Crash Recovery**
-- [x] Allow worker to process jobs and verify delivery in **Ethereal Email**
-- [x] Test **Gmail-Style multi-select**, bulk favorite, bulk archive, and bulk delete
-- [x] Test **Sort by Sent/Scheduled time** (ascending / descending) and **25-item pagination**
-- [x] Switch to mobile viewport in DevTools to verify **Apple-style floating bottom navbar**
