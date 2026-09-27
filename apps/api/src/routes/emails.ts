@@ -175,4 +175,31 @@ router.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFu
   }
 });
 
+// DELETE /api/v1/emails/:id
+router.delete('/:id', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authUser = req.user!;
+    const { id } = req.params;
+
+    const email = await prisma.emailJob.findFirst({
+      where: {
+        id,
+        campaign: { userId: authUser.id },
+      },
+    });
+
+    if (!email) {
+      throw new AppError(404, 'NOT_FOUND', 'Email job not found or unauthorized');
+    }
+
+    await prisma.emailJob.delete({
+      where: { id },
+    });
+
+    return res.json({ success: true, message: 'Email job successfully deleted', id });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
