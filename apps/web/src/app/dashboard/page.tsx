@@ -52,8 +52,8 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [scheduledCount, setScheduledCount] = useState(12);
-  const [sentCount, setSentCount] = useState(785);
+  const [scheduledCount, setScheduledCount] = useState(0);
+  const [sentCount, setSentCount] = useState(0);
 
   // View state: 'list' | 'compose' | 'detail'
   const [viewMode, setViewMode] = useState<'list' | 'compose' | 'detail'>('list');
@@ -71,72 +71,41 @@ export default function DashboardPage() {
   const [scheduledDateStr, setScheduledDateStr] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch emails from API
+  // Fetch emails from API and sync exact counts
   const fetchEmails = async () => {
     setLoading(true);
     try {
+      const headers = {
+        'x-dev-user-id': 'usr_demo_oliver',
+        'x-dev-user-email': 'oliver.brown@domain.io',
+      };
+
       const endpoint = activeTab === 'scheduled' ? 'scheduled' : 'sent';
       const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
-      const res = await fetch(`http://localhost:4000/api/v1/emails/${endpoint}?limit=50${searchParam}`, {
-        headers: {
-          'x-dev-user-id': 'usr_demo_oliver',
-          'x-dev-user-email': 'oliver.brown@domain.io',
-        },
-      });
 
-      if (res.ok) {
-        const json = await res.json();
-        const data = json.data || [];
-        setEmails(data);
-        if (activeTab === 'scheduled') {
-          setScheduledCount(json.pagination?.total || data.length);
-        } else {
-          setSentCount(json.pagination?.total || data.length);
-        }
+      // Fetch active tab list AND counts for both tabs simultaneously
+      const [listRes, scheduledRes, sentRes] = await Promise.all([
+        fetch(`http://localhost:4000/api/v1/emails/${endpoint}?limit=50${searchParam}`, { headers }),
+        fetch(`http://localhost:4000/api/v1/emails/scheduled?limit=1`, { headers }),
+        fetch(`http://localhost:4000/api/v1/emails/sent?limit=1`, { headers }),
+      ]);
+
+      if (listRes.ok) {
+        const json = await listRes.json();
+        setEmails(json.data || []);
       }
-    } catch {
-      // Fallback local sample data matching Figma if API is not yet seeded
-      if (activeTab === 'scheduled') {
-        setEmails([
-          {
-            id: 'demo-1',
-            recipient: 'John Smith',
-            subject: 'Meeting follow-up - Scheduled',
-            body: 'Hi John, just wanted to follow up on our meeting yesterday and confirm the project timeline...',
-            scheduledAt: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
-            status: 'SCHEDULED',
-          },
-          {
-            id: 'demo-2',
-            recipient: 'Olive',
-            subject: "Ramit, great to meet you - you'll love it",
-            body: 'Hi Olive, just wanted to follow up on our meeting and see if you had any questions on the proposal...',
-            scheduledAt: new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString(),
-            status: 'SCHEDULED',
-          },
-        ]);
-      } else {
-        setEmails([
-          {
-            id: 'demo-3',
-            recipient: 'Sarah Wilson',
-            subject: 'Re: Project Update',
-            body: 'Thanks for the update, Sarah. Looks good! Everything is on track for Thursday.',
-            scheduledAt: new Date().toISOString(),
-            sentAt: new Date().toISOString(),
-            status: 'SENT',
-          },
-          {
-            id: 'demo-4',
-            recipient: 'Support',
-            subject: 'Issue with login',
-            body: 'I am having trouble logging in to the dashboard with my credentials. Could you assist?',
-            scheduledAt: new Date().toISOString(),
-            sentAt: new Date().toISOString(),
-            status: 'SENT',
-          },
-        ]);
+
+      if (scheduledRes.ok) {
+        const schedJson = await scheduledRes.json();
+        setScheduledCount(schedJson.pagination?.total ?? 0);
       }
+
+      if (sentRes.ok) {
+        const sentJson = await sentRes.json();
+        setSentCount(sentJson.pagination?.total ?? 0);
+      }
+    } catch (err) {
+      console.warn('Notice fetching emails:', err);
     } finally {
       setLoading(false);
     }
@@ -228,11 +197,9 @@ export default function DashboardPage() {
         {/* User profile dropdown pill */}
         <div className="flex items-center justify-between p-2 rounded-xl bg-[#F5F7F6] border border-slate-100 mb-4 cursor-pointer hover:bg-slate-100/80 transition">
           <div className="flex items-center gap-2.5 min-w-0">
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=64&h=64"
-              alt="Oliver Brown"
-              className="w-8 h-8 rounded-full object-cover shrink-0"
-            />
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
+              OB
+            </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-slate-900 leading-tight truncate">
                 Oliver Brown
@@ -422,11 +389,9 @@ export default function DashboardPage() {
                 <Star className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
                 <Archive className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
                 <Trash2 className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=64&h=64"
-                  alt="Avatar"
-                  className="w-7 h-7 rounded-full object-cover ml-2"
-                />
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-[10px] ml-2 shrink-0">
+                  OB
+                </div>
               </div>
             </div>
 
