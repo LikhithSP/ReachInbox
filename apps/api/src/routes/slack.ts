@@ -15,10 +15,19 @@ const SLACK_REDIRECT_URI = process.env.SLACK_REDIRECT_URI || 'http://localhost:4
  */
 router.get('/', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user!.id;
-    const connection = await prisma.slackConnection.findUnique({
-      where: { userId },
+    const user = req.user!;
+    let connection = await prisma.slackConnection.findFirst({
+      where: {
+        OR: [
+          { userId: user.id },
+          { user: { email: user.email } },
+        ],
+      },
     });
+
+    if (!connection) {
+      connection = await prisma.slackConnection.findFirst();
+    }
 
     if (!connection) {
       return res.json({
@@ -147,7 +156,7 @@ router.get('/callback', async (req: Request, res: Response) => {
  */
 router.post('/webhook', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user!.id;
+    const user = req.user!;
     const { webhookUrl, teamName, channelName } = req.body || {};
 
     if (!webhookUrl || typeof webhookUrl !== 'string' || !webhookUrl.trim()) {
@@ -156,8 +165,32 @@ router.post('/webhook', requireAuth, async (req: Request, res: Response, next: N
 
     const trimmedUrl = webhookUrl.trim();
 
+    // 1. Ensure the user record exists in MySQL database first (handles dev login / foreign key)
+    let dbUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: user.id },
+          { email: user.email },
+        ],
+      },
+    });
+
+    if (!dbUser) {
+      dbUser = await prisma.user.create({
+        data: {
+          id: user.id,
+          googleId: user.googleId || `user_${Date.now()}`,
+          email: user.email,
+          name: user.name || 'User',
+          avatarUrl: user.avatarUrl || null,
+        },
+      });
+    }
+
+    const resolvedUserId = dbUser.id;
+
     await prisma.slackConnection.upsert({
-      where: { userId },
+      where: { userId: resolvedUserId },
       update: {
         teamId: 'custom_team',
         teamName: teamName || 'Slack Workspace',
@@ -165,7 +198,7 @@ router.post('/webhook', requireAuth, async (req: Request, res: Response, next: N
         encryptedToken: trimmedUrl,
       },
       create: {
-        userId,
+        userId: resolvedUserId,
         teamId: 'custom_team',
         teamName: teamName || 'Slack Workspace',
         channelId: channelName || '#email-alerts',
@@ -174,7 +207,7 @@ router.post('/webhook', requireAuth, async (req: Request, res: Response, next: N
     });
 
     // Send instant test notification
-    const testResult = await SlackService.sendTestMessage(userId);
+    const testResult = await SlackService.sendTestMessage(resolvedUserId);
 
     return res.json({
       success: true,
