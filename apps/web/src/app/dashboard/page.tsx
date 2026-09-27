@@ -39,6 +39,14 @@ import {
   FileText,
   Pencil,
   Check,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Menu,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  Square,
 } from 'lucide-react';
 
 interface EmailItem {
@@ -57,13 +65,15 @@ interface EmailItem {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'scheduled' | 'sent'>('scheduled');
+  const [activeTab, setActiveTab] = useState<'scheduled' | 'sent' | 'favorites' | 'archive'>('scheduled');
   const [searchQuery, setSearchQuery] = useState('');
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SCHEDULED' | 'QUEUED' | 'SENT' | 'FAILED'>('ALL');
+  const [timeSortOrder, setTimeSortOrder] = useState<'DESC' | 'ASC'>('DESC');
   const [scheduledCount, setScheduledCount] = useState(0);
   const [sentCount, setSentCount] = useState(0);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
@@ -83,6 +93,189 @@ export default function DashboardPage() {
     } catch {}
     router.push('/login');
   };
+
+  // Favorites & Archives set
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [archivedIds, setArchivedIds] = useState<string[]>([]);
+
+  // Ensure dark class is removed
+  useEffect(() => {
+    try {
+      localStorage.removeItem('reachinbox_theme');
+      document.documentElement.classList.remove('dark');
+    } catch {}
+  }, []);
+
+  // Load favorites & archived from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedFavs = localStorage.getItem('reachinbox_favorites');
+      if (savedFavs) setFavoriteIds(JSON.parse(savedFavs));
+      const savedArch = localStorage.getItem('reachinbox_archived');
+      if (savedArch) setArchivedIds(JSON.parse(savedArch));
+    } catch {}
+  }, []);
+
+  const toggleFavorite = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setFavoriteIds((prev) => {
+      const updated = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
+      try {
+        localStorage.setItem('reachinbox_favorites', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const toggleArchive = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setArchivedIds((prev) => {
+      const updated = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
+      try {
+        localStorage.setItem('reachinbox_archived', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    if (selectedEmail && selectedEmail.id === id) {
+      setViewMode('list');
+      setSelectedEmail(null);
+    }
+  };
+
+  const deleteEmail = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await fetch(`http://localhost:4000/api/v1/emails/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'x-dev-user-id': currentUser.id,
+          'x-dev-user-email': currentUser.email,
+        },
+      });
+    } catch (err) {
+      console.warn('Notice deleting email job:', err);
+    }
+
+    // Optimistically remove from state
+    setEmails((prev) => prev.filter((item) => item.id !== id));
+    if (activeTab === 'scheduled') {
+      setScheduledCount((prev) => Math.max(0, prev - 1));
+    } else {
+      setSentCount((prev) => Math.max(0, prev - 1));
+    }
+
+    if (selectedEmail && selectedEmail.id === id) {
+      setViewMode('list');
+      setSelectedEmail(null);
+    }
+  };
+
+  // Pagination & Bulk Selection States
+  const [currentPage, setCurrentPage] = useState(1);
+  const EMAILS_PER_PAGE = 25;
+  const [selectedEmailIds, setSelectedEmailIds] = useState<string[]>([]);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+
+  // Toggle single email selection
+  const toggleSelectEmail = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedEmailIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Toggle select all on current page
+  const toggleSelectAll = (currentPageIds: string[]) => {
+    const allSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedEmailIds.includes(id));
+    if (allSelected) {
+      setSelectedEmailIds((prev) => prev.filter((id) => !currentPageIds.includes(id)));
+    } else {
+      setSelectedEmailIds((prev) => Array.from(new Set([...prev, ...currentPageIds])));
+    }
+  };
+
+  // Bulk Favorite
+  const handleBulkFavorite = () => {
+    if (selectedEmailIds.length === 0) return;
+    setFavoriteIds((prev) => {
+      const allSelectedAreFavorites = selectedEmailIds.every((id) => prev.includes(id));
+      let updated: string[];
+      if (allSelectedAreFavorites) {
+        // Remove selected from favorites
+        updated = prev.filter((id) => !selectedEmailIds.includes(id));
+      } else {
+        // Add all selected to favorites
+        updated = Array.from(new Set([...prev, ...selectedEmailIds]));
+      }
+      try {
+        localStorage.setItem('reachinbox_favorites', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setSelectedEmailIds([]);
+  };
+
+  // Bulk Archive
+  const handleBulkArchive = () => {
+    if (selectedEmailIds.length === 0) return;
+    setArchivedIds((prev) => {
+      const allSelectedAreArchived = selectedEmailIds.every((id) => prev.includes(id));
+      let updated: string[];
+      if (allSelectedAreArchived) {
+        // Unarchive selected
+        updated = prev.filter((id) => !selectedEmailIds.includes(id));
+      } else {
+        // Archive selected
+        updated = Array.from(new Set([...prev, ...selectedEmailIds]));
+      }
+      try {
+        localStorage.setItem('reachinbox_archived', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setSelectedEmailIds([]);
+  };
+
+  // Bulk Delete
+  const handleBulkDelete = async () => {
+    if (selectedEmailIds.length === 0) return;
+    const idsToDelete = [...selectedEmailIds];
+    setBulkDeleteModalOpen(false);
+    setSelectedEmailIds([]);
+
+    // Delete in background
+    idsToDelete.forEach(async (id) => {
+      try {
+        await fetch(`http://localhost:4000/api/v1/emails/${id}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: {
+            'x-dev-user-id': currentUser.id,
+            'x-dev-user-email': currentUser.email,
+          },
+        });
+      } catch (err) {
+        console.warn('Notice deleting email job in bulk:', err);
+      }
+    });
+
+    // Optimistically update local state
+    setEmails((prev) => prev.filter((item) => !idsToDelete.includes(item.id)));
+    if (activeTab === 'scheduled') {
+      setScheduledCount((prev) => Math.max(0, prev - idsToDelete.length));
+    } else {
+      setSentCount((prev) => Math.max(0, prev - idsToDelete.length));
+    }
+
+    if (selectedEmail && idsToDelete.includes(selectedEmail.id)) {
+      setViewMode('list');
+      setSelectedEmail(null);
+    }
+  };
+
+  // Custom UI Delete Confirmation Modal State
+  const [emailToDelete, setEmailToDelete] = useState<{ id: string; subject: string; recipient: string } | null>(null);
 
   // View state: 'list' | 'compose' | 'detail'
   const [viewMode, setViewMode] = useState<'list' | 'compose' | 'detail'>('list');
@@ -360,53 +553,87 @@ export default function DashboardPage() {
     e.target.value = '';
   };
 
+  // Fast memory cache for instant tab transitions
+  const emailsCacheRef = useRef<{
+    scheduled?: EmailItem[];
+    sent?: EmailItem[];
+  }>({});
+
   // Fetch emails from API and sync exact counts
-  const fetchEmails = async () => {
-    setLoading(true);
+  const fetchEmails = async (silent = false, targetTab?: 'scheduled' | 'sent' | 'favorites' | 'archive') => {
+    const tabToUse = targetTab || activeTab;
+    if (!silent) setLoading(true);
+
     try {
       const headers = {
-        'x-dev-user-id': 'usr_demo_oliver',
-        'x-dev-user-email': 'oliver.brown@domain.io',
+        'x-dev-user-id': currentUser.id || 'usr_demo_likhith',
+        'x-dev-user-email': currentUser.email || 'oliver.brown@domain.io',
       };
 
-      const endpoint = activeTab === 'scheduled' ? 'scheduled' : 'sent';
       const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
 
-      // Fetch active tab list AND counts for both tabs simultaneously
-      const [listRes, scheduledRes, sentRes] = await Promise.all([
-        fetch(`http://localhost:4000/api/v1/emails/${endpoint}?limit=50${searchParam}`, {
+      // Simultaneously fetch both tabs in parallel so switching tabs is always instantaneous
+      const [schedRes, sentRes] = await Promise.all([
+        fetch(`http://localhost:4000/api/v1/emails/scheduled?limit=100${searchParam}`, {
           headers,
           credentials: 'include',
         }),
-        fetch(`http://localhost:4000/api/v1/emails/scheduled?limit=1`, {
-          headers,
-          credentials: 'include',
-        }),
-        fetch(`http://localhost:4000/api/v1/emails/sent?limit=1`, {
+        fetch(`http://localhost:4000/api/v1/emails/sent?limit=100${searchParam}`, {
           headers,
           credentials: 'include',
         }),
       ]);
 
-      if (listRes.ok) {
-        const json = await listRes.json();
-        setEmails(json.data || []);
-      }
+      const schedJson = schedRes.ok ? await schedRes.json() : { data: [], pagination: { total: 0 } };
+      const sentJson = sentRes.ok ? await sentRes.json() : { data: [], pagination: { total: 0 } };
 
-      if (scheduledRes.ok) {
-        const schedJson = await scheduledRes.json();
-        setScheduledCount(schedJson.pagination?.total ?? 0);
-      }
+      const schedEmails: EmailItem[] = schedJson.data || [];
+      const sentEmails: EmailItem[] = sentJson.data || [];
 
-      if (sentRes.ok) {
-        const sentJson = await sentRes.json();
-        setSentCount(sentJson.pagination?.total ?? 0);
+      // Update memory cache
+      emailsCacheRef.current.scheduled = schedEmails;
+      emailsCacheRef.current.sent = sentEmails;
+
+      // Update counters immediately
+      setScheduledCount(schedJson.pagination?.total ?? schedEmails.length);
+      setSentCount(sentJson.pagination?.total ?? sentEmails.length);
+
+      // Populate current active list
+      if (tabToUse === 'favorites' || tabToUse === 'archive') {
+        setEmails([...schedEmails, ...sentEmails]);
+      } else if (tabToUse === 'scheduled') {
+        setEmails(schedEmails);
+      } else {
+        setEmails(sentEmails);
       }
     } catch (err) {
       console.warn('Notice fetching emails:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
+  };
+
+  // Instant switch tab helper
+  const handleTabSwitch = (tab: 'scheduled' | 'sent' | 'favorites' | 'archive') => {
+    setActiveTab(tab);
+    setStatusFilter('ALL');
+    setViewMode('list');
+    setSelectedEmail(null);
+    setMobileSidebarOpen(false);
+    setCurrentPage(1);
+    setSelectedEmailIds([]);
+
+    // Instant paint from cache before background refresh
+    if (tab === 'scheduled' && emailsCacheRef.current.scheduled) {
+      setEmails(emailsCacheRef.current.scheduled);
+    } else if (tab === 'sent' && emailsCacheRef.current.sent) {
+      setEmails(emailsCacheRef.current.sent);
+    } else if ((tab === 'favorites' || tab === 'archive') && emailsCacheRef.current.scheduled && emailsCacheRef.current.sent) {
+      setEmails([...emailsCacheRef.current.scheduled, ...emailsCacheRef.current.sent]);
+    }
+
+    // Refresh immediately in background
+    fetchEmails(true, tab);
   };
 
   useEffect(() => {
@@ -437,9 +664,41 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchEmails();
-  }, [activeTab, searchQuery]);
 
-  // Format timestamp badge like Figma: "Tue 9:15:12 AM" or "Thu 8:15:12 PM"
+    // Auto-sync polling every 4 seconds in background so sent/scheduled status updates fast without manual intervention
+    const pollInterval = setInterval(() => {
+      if (viewMode === 'list') {
+        fetchEmails(true);
+      }
+    }, 4000);
+
+    return () => clearInterval(pollInterval);
+  }, [activeTab, searchQuery, viewMode]);
+
+  // Format timestamp: if today, display time only (e.g. "12:45 PM"); if not today, display day (e.g. "Sat", "Thu", "Fri")
+  const formatListTimestamp = (dateStr?: string | null) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      const now = new Date();
+      const isToday =
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+
+      if (isToday) {
+        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      } else {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        return days[d.getDay()];
+      }
+    } catch {
+      return '';
+    }
+  };
+
+  // Format timestamp badge for scheduled Figma pill: "Tue 9:15:12 AM" or "Thu 8:15:12 PM"
   const formatBadgeTime = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
@@ -481,6 +740,68 @@ export default function DashboardPage() {
       .trim();
   };
 
+  // Helper to extract embedded attachments and clean email body HTML
+  const parseEmailContentAndAttachments = (htmlContent?: string) => {
+    if (!htmlContent) return { cleanBody: '', attachments: [] };
+
+    const parser = typeof window !== 'undefined' ? new DOMParser() : null;
+    if (!parser) return { cleanBody: htmlContent, attachments: [] };
+
+    try {
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+      const foundAttachments: { id: string; name: string; size: string; url: string; isImage: boolean }[] = [];
+
+      // Find attachment divs or img tags
+      const attDivs = doc.querySelectorAll('div[data-attachment="true"]');
+      if (attDivs.length > 0) {
+        attDivs.forEach((div, idx) => {
+          const img = div.querySelector('img');
+          const rawName = div.getAttribute('data-filename') || (img ? img.getAttribute('alt') : '') || `attachment_${idx + 1}.png`;
+          const rawSize = div.getAttribute('data-filesize') || '1.2 MB';
+          const name = decodeURIComponent(rawName);
+          const size = decodeURIComponent(rawSize);
+          const url = img ? img.getAttribute('src') || '' : '';
+
+          if (url) {
+            foundAttachments.push({
+              id: `att-${idx}`,
+              name,
+              size,
+              url,
+              isImage: true,
+            });
+          }
+          div.remove();
+        });
+      } else {
+        // Fallback for earlier emails with bare <img> tags
+        const imgs = doc.querySelectorAll('img');
+        imgs.forEach((img, idx) => {
+          const src = img.getAttribute('src') || '';
+          if (src && (src.startsWith('data:image/') || src.startsWith('http'))) {
+            const alt = img.getAttribute('alt') || `Attachment_${idx + 1}.png`;
+            foundAttachments.push({
+              id: `att-${idx}`,
+              name: alt,
+              size: '1.2 MB',
+              url: src,
+              isImage: true,
+            });
+            // Remove image from body so it appears cleanly outside in attachment card
+            img.remove();
+          }
+        });
+      }
+
+      return {
+        cleanBody: doc.body.innerHTML,
+        attachments: foundAttachments,
+      };
+    } catch {
+      return { cleanBody: htmlContent, attachments: [] };
+    }
+  };
+
   // Handle Send or Send Later
   const handleSendOrSchedule = async (isScheduled: boolean) => {
     setSubmitting(true);
@@ -501,14 +822,14 @@ export default function DashboardPage() {
       const delayMs = parseInt(delaySeconds, 10) ? parseInt(delaySeconds, 10) * 1000 : 2000;
       const limit = parseInt(hourlyLimit, 10) ? parseInt(hourlyLimit, 10) : 100;
 
-      // If images or attachments were added, append them into HTML body
+      // If images or attachments were added, append them with clear attachment container markers
       let finalBodyHtml = composeBody || 'No Content';
       const imageAttachments = attachments.filter((att) => att.isImage && att.url);
       if (imageAttachments.length > 0) {
         const imagesHtml = imageAttachments
           .map(
             (img) =>
-              `<div style="margin-top:16px;"><img src="${img.url}" alt="${img.name}" style="max-width:100%; border-radius:8px; border:1px solid #E2E8F0;" /></div>`
+              `<div data-attachment="true" data-filename="${encodeURIComponent(img.name)}" data-filesize="${encodeURIComponent(img.size)}" style="margin-top:16px;"><img src="${img.url}" alt="${img.name}" data-attachment-img="true" style="max-width:100%; border-radius:8px;" /></div>`
           )
           .join('');
         finalBodyHtml = `${finalBodyHtml}${imagesHtml}`;
@@ -560,8 +881,16 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-white text-slate-800 flex font-sans antialiased">
-      {/* 1. Left Sidebar Navigation (Matching Figma Exactly: width 260px, h-screen, border-r 1px, pt 20px, pr 16px, pb 16px, pl 8px) */}
+    <div className="h-screen w-screen overflow-hidden bg-white text-slate-800 flex flex-col md:flex-row font-sans antialiased relative">
+      {/* Mobile Drawer Backdrop */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 md:hidden backdrop-blur-xs transition-opacity"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* 1. Left Sidebar Navigation (Matching Figma on desktop, slide-over drawer on mobile) */}
       <aside
         style={{
           width: '260px',
@@ -573,7 +902,9 @@ export default function DashboardPage() {
           paddingLeft: '8px',
           opacity: 1,
         }}
-        className="flex flex-col justify-between shrink-0 bg-white select-none"
+        className={`fixed inset-y-0 left-0 z-50 md:static flex flex-col justify-between shrink-0 bg-white select-none transition-transform duration-200 ease-in-out ${
+          mobileSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+        }`}
       >
         {/* Logo container: "ReachInbox Email Scheduler" */}
         <div
@@ -639,6 +970,15 @@ export default function DashboardPage() {
                 Email Scheduler
               </span>
             </div>
+            {/* Mobile close button */}
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(false)}
+              className="p-1 text-slate-400 hover:text-slate-700 md:hidden ml-auto rounded-lg hover:bg-slate-100"
+              title="Close Menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
@@ -723,6 +1063,7 @@ export default function DashboardPage() {
             setScheduledDateStr('');
             setShowSendLater(false);
             setAttachments([]);
+            setMobileSidebarOpen(false);
           }}
           style={{
             width: '236px',
@@ -778,12 +1119,7 @@ export default function DashboardPage() {
 
           {/* Scheduled Nav Item */}
           <button
-            onClick={() => {
-              setActiveTab('scheduled');
-              setStatusFilter('ALL');
-              setViewMode('list');
-              setSelectedEmail(null);
-            }}
+            onClick={() => handleTabSwitch('scheduled')}
             style={{
               width: '236px',
               height: '36px',
@@ -815,12 +1151,7 @@ export default function DashboardPage() {
 
           {/* Sent Nav Item */}
           <button
-            onClick={() => {
-              setActiveTab('sent');
-              setStatusFilter('ALL');
-              setViewMode('list');
-              setSelectedEmail(null);
-            }}
+            onClick={() => handleTabSwitch('sent')}
             style={{
               width: '236px',
               height: '36px',
@@ -849,6 +1180,72 @@ export default function DashboardPage() {
               {sentCount}
             </span>
           </button>
+
+          {/* Favorites Nav Item */}
+          <button
+            onClick={() => handleTabSwitch('favorites')}
+            style={{
+              width: '236px',
+              height: '36px',
+              borderRadius: '12px',
+              paddingRight: '16px',
+              paddingLeft: '16px',
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              fontSize: '14px',
+              lineHeight: '100%',
+              letterSpacing: '-0.15px',
+              opacity: 1,
+            }}
+            className={`flex items-center justify-between transition ${
+              activeTab === 'favorites' && viewMode === 'list'
+                ? 'bg-[#E5F5EB] text-slate-950 font-bold'
+                : 'text-slate-600 hover:bg-slate-50 font-normal'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500 stroke-[1.5]" />
+              <span className={activeTab === 'favorites' && viewMode === 'list' ? 'font-bold text-slate-950' : 'font-normal'}>
+                Favorites
+              </span>
+            </div>
+            <span className={`text-[12px] ${activeTab === 'favorites' && viewMode === 'list' ? 'text-slate-800 font-semibold' : 'text-slate-500 font-normal'}`}>
+              {favoriteIds.length}
+            </span>
+          </button>
+
+          {/* Archive Nav Item */}
+          <button
+            onClick={() => handleTabSwitch('archive')}
+            style={{
+              width: '236px',
+              height: '36px',
+              borderRadius: '12px',
+              paddingRight: '16px',
+              paddingLeft: '16px',
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              fontSize: '14px',
+              lineHeight: '100%',
+              letterSpacing: '-0.15px',
+              opacity: 1,
+            }}
+            className={`flex items-center justify-between transition ${
+              activeTab === 'archive' && viewMode === 'list'
+                ? 'bg-[#E5F5EB] text-slate-950 font-bold'
+                : 'text-slate-600 hover:bg-slate-50 font-normal'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Archive className="w-4 h-4 text-slate-700 stroke-[1.75]" />
+              <span className={activeTab === 'archive' && viewMode === 'list' ? 'font-bold text-slate-950' : 'font-normal'}>
+                Archive
+              </span>
+            </div>
+            <span className={`text-[12px] ${activeTab === 'archive' && viewMode === 'list' ? 'text-slate-800 font-semibold' : 'text-slate-500 font-normal'}`}>
+              {archivedIds.length}
+            </span>
+          </button>
+
+
         </div>
 
         {/* Visible Log Out Button at the bottom of sidebar */}
@@ -864,10 +1261,10 @@ export default function DashboardPage() {
               fontSize: '14px',
               letterSpacing: '-0.15px',
             }}
-            className="flex items-center gap-2.5 px-4 text-slate-600 hover:text-red-600 hover:bg-red-50/70 border border-slate-200/80 transition"
+            className="flex items-center gap-2.5 px-4 bg-[#FEE2E2]/60 hover:bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA] font-medium transition cursor-pointer shadow-xs active:scale-[0.98]"
           >
-            <LogOut className="w-4 h-4 stroke-[1.75]" />
-            <span className="font-medium">Log Out</span>
+            <LogOut className="w-4 h-4 stroke-[2] text-[#DC2626]" />
+            <span className="font-semibold text-sm">Log Out</span>
           </button>
         </div>
       </aside>
@@ -889,9 +1286,19 @@ export default function DashboardPage() {
               }}
               className="flex items-center justify-between"
             >
-              <div className="flex items-center gap-4 flex-1 max-w-[680px]">
-                <div className="relative w-full">
-                  <Search className="w-4 h-4 text-[#9CA3AF] absolute left-4 top-1/2 -translate-y-1/2 stroke-[1.75]" />
+              <div className="flex items-center gap-2 sm:gap-4 flex-1 max-w-[680px]">
+                {/* Mobile hamburger menu trigger */}
+                <button
+                  type="button"
+                  onClick={() => setMobileSidebarOpen(true)}
+                  className="p-2 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 md:hidden shrink-0"
+                  title="Open Navigation Menu"
+                >
+                  <Menu className="w-5 h-5 stroke-[2]" />
+                </button>
+
+                <div className="relative w-full min-w-0">
+                  <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-1/2 -translate-y-1/2 stroke-[1.75]" />
                   <input
                     type="text"
                     placeholder="Search"
@@ -904,7 +1311,7 @@ export default function DashboardPage() {
                       lineHeight: '100%',
                       letterSpacing: '-0.15px',
                     }}
-                    className="w-full h-9 pl-11 pr-5 bg-[#F4F6F5] text-slate-800 placeholder-[#9CA3AF] rounded-full focus:outline-none focus:ring-1 focus:ring-[#00A843] border-none"
+                    className="w-full h-9 pl-10 pr-4 bg-[#F4F6F5] text-slate-800 placeholder-[#9CA3AF] rounded-full focus:outline-none focus:ring-1 focus:ring-[#00A843] border-none text-sm"
                   />
                 </div>
 
@@ -1030,6 +1437,48 @@ export default function DashboardPage() {
                               </>
                             )}
                           </div>
+
+                          {/* Sort Section */}
+                          <div className="pt-1.5 border-t border-slate-100">
+                            <div className="px-3 py-1 flex items-center justify-between">
+                              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                <ArrowUpDown className="w-3 h-3 text-slate-400 stroke-[2]" />
+                                Sort by time
+                              </span>
+                            </div>
+
+                            <div className="py-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTimeSortOrder('DESC');
+                                  setShowFilterMenu(false);
+                                }}
+                                className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition text-slate-800"
+                              >
+                                <span className={`flex items-center gap-1.5 ${timeSortOrder === 'DESC' ? 'font-semibold text-[#00A843]' : 'font-normal'}`}>
+                                  <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+                                  Newest first (Descending)
+                                </span>
+                                {timeSortOrder === 'DESC' && <Check className="w-3.5 h-3.5 text-[#00A843]" />}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTimeSortOrder('ASC');
+                                  setShowFilterMenu(false);
+                                }}
+                                className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-slate-50 transition text-slate-800"
+                              >
+                                <span className={`flex items-center gap-1.5 ${timeSortOrder === 'ASC' ? 'font-semibold text-[#00A843]' : 'font-normal'}`}>
+                                  <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+                                  Oldest first (Ascending)
+                                </span>
+                                {timeSortOrder === 'ASC' && <Check className="w-3.5 h-3.5 text-[#00A843]" />}
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </>
                     )}
@@ -1062,6 +1511,114 @@ export default function DashboardPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Right Side: Bulk Actions (when items selected) OR Gmail-style Pagination (when no items selected) */}
+              <div className="flex items-center gap-2 sm:gap-4 shrink-0 pl-2">
+                {selectedEmailIds.length > 0 ? (
+                  /* Gmail-style Bulk Action Toolbar */
+                  <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 border border-slate-200/90 rounded-xl px-2.5 py-1 animate-in fade-in zoom-in-95 duration-150">
+                    <span className="text-xs font-semibold text-slate-700 mr-1 sm:mr-2">
+                      {selectedEmailIds.length} <span className="hidden sm:inline font-normal text-slate-500">selected</span>
+                    </span>
+
+                    {/* Bulk Favorite */}
+                    <button
+                      type="button"
+                      onClick={handleBulkFavorite}
+                      className="p-1.5 rounded-lg text-slate-600 hover:text-amber-500 hover:bg-white transition cursor-pointer"
+                      title="Add or remove favorite for selected emails"
+                    >
+                      <Star className="w-4 h-4 stroke-[1.75]" />
+                    </button>
+
+                    {/* Bulk Archive */}
+                    <button
+                      type="button"
+                      onClick={handleBulkArchive}
+                      className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-600 hover:bg-white transition cursor-pointer"
+                      title="Archive or unarchive selected emails"
+                    >
+                      <Archive className="w-4 h-4 stroke-[1.75]" />
+                    </button>
+
+                    {/* Bulk Delete */}
+                    <button
+                      type="button"
+                      onClick={() => setBulkDeleteModalOpen(true)}
+                      className="p-1.5 rounded-lg text-slate-600 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                      title="Delete selected emails"
+                    >
+                      <Trash2 className="w-4 h-4 stroke-[1.75]" />
+                    </button>
+
+                    {/* Deselect / Cancel button */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEmailIds([])}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-white text-xs ml-0.5 sm:ml-1 transition cursor-pointer"
+                      title="Clear selection"
+                    >
+                      <X className="w-3.5 h-3.5 stroke-[2]" />
+                    </button>
+                  </div>
+                ) : (
+                  /* Gmail-style Pagination display: e.g. "1–25 of 142" with Left & Right arrows */
+                  (() => {
+                    const currentFiltered = emails.filter((item) => {
+                      if (activeTab === 'favorites') {
+                        if (!favoriteIds.includes(item.id)) return false;
+                      } else if (activeTab === 'archive') {
+                        if (!archivedIds.includes(item.id)) return false;
+                      } else {
+                        if (archivedIds.includes(item.id)) return false;
+                      }
+                      if (statusFilter === 'ALL') return true;
+                      if (statusFilter === 'QUEUED') return item.status === 'QUEUED' || item.status === 'RATE_LIMITED';
+                      return item.status === statusFilter;
+                    });
+                    const totalItems = currentFiltered.length;
+                    const totalPages = Math.max(1, Math.ceil(totalItems / EMAILS_PER_PAGE));
+                    const safePage = Math.min(currentPage, totalPages);
+                    const startItem = totalItems === 0 ? 0 : (safePage - 1) * EMAILS_PER_PAGE + 1;
+                    const endItem = Math.min(safePage * EMAILS_PER_PAGE, totalItems);
+
+                    return (
+                      <div className="flex items-center gap-1.5 sm:gap-2.5 text-slate-600 select-none">
+                        <span
+                          style={{
+                            fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                            letterSpacing: '-0.1px',
+                          }}
+                          className="text-xs text-slate-500 font-medium whitespace-nowrap"
+                        >
+                          {totalItems === 0 ? '0 of 0' : `${startItem}–${endItem} of ${totalItems}`}
+                        </span>
+
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            disabled={safePage <= 1}
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed text-slate-600 transition cursor-pointer"
+                            title="Previous page"
+                          >
+                            <ChevronLeft className="w-4 h-4 stroke-[2]" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={safePage >= totalPages}
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed text-slate-600 transition cursor-pointer"
+                            title="Next page"
+                          >
+                            <ChevronRight className="w-4 h-4 stroke-[2]" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
             </div>
 
             {/* Email Rows List */}
@@ -1072,32 +1629,78 @@ export default function DashboardPage() {
                 paddingLeft: '16px',
                 opacity: 1,
               }}
-              className="flex-1 overflow-y-auto space-y-1"
+              className="flex-1 overflow-y-auto space-y-1 pb-24 md:pb-4"
             >
               {(() => {
                 const filteredEmails = emails.filter((item) => {
+                  // If viewing Favorites tab
+                  if (activeTab === 'favorites') {
+                    if (!favoriteIds.includes(item.id)) return false;
+                  }
+                  // If viewing Archive tab
+                  else if (activeTab === 'archive') {
+                    if (!archivedIds.includes(item.id)) return false;
+                  }
+                  // If in scheduled or sent view, hide archived items
+                  else {
+                    if (archivedIds.includes(item.id)) return false;
+                  }
+
                   if (statusFilter === 'ALL') return true;
                   if (statusFilter === 'QUEUED') return item.status === 'QUEUED' || item.status === 'RATE_LIMITED';
                   return item.status === statusFilter;
+                }).sort((a, b) => {
+                  const timeA = new Date(activeTab === 'sent' ? (a.sentAt || a.scheduledAt) : a.scheduledAt).getTime();
+                  const timeB = new Date(activeTab === 'sent' ? (b.sentAt || b.scheduledAt) : b.scheduledAt).getTime();
+                  if (timeSortOrder === 'ASC') {
+                    return timeA - timeB; // Oldest first
+                  } else {
+                    return timeB - timeA; // Newest first (default)
+                  }
                 });
 
-                return loading ? (
-                <div className="space-y-3 px-6 py-4">
-                  {[1, 2, 3, 4, 5].map((idx) => (
+                // Paginate after 25 emails like Gmail
+                const totalPages = Math.max(1, Math.ceil(filteredEmails.length / EMAILS_PER_PAGE));
+                const safeCurrentPage = Math.min(currentPage, totalPages);
+                const startIndex = (safeCurrentPage - 1) * EMAILS_PER_PAGE;
+                const pagedEmails = filteredEmails.slice(startIndex, startIndex + EMAILS_PER_PAGE);
+                const currentPageIds = pagedEmails.map((e) => e.id);
+                const allCurrentSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedEmailIds.includes(id));
+                const someCurrentSelected = currentPageIds.some((id) => selectedEmailIds.includes(id));
+
+                if (loading) {
+                  return (
+                    <div className="space-y-1">
+                  {[1, 2, 3, 4, 5, 6].map((idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between px-8 py-4 bg-white/70 rounded-xl border border-slate-100 animate-pulse"
+                      className="flex items-center justify-between px-4 sm:px-6 md:px-10 py-3.5 bg-white border-b border-slate-100/80 animate-pulse"
                     >
-                      <div className="flex items-center gap-6 flex-1">
-                        <div className="w-36 h-4 bg-slate-200/70 rounded-md" />
-                        <div className="w-28 h-6 bg-slate-200/50 rounded-full" />
-                        <div className="w-64 h-4 bg-slate-200/60 rounded-md" />
+                      <div className="flex items-center gap-6 flex-1 min-w-0">
+                        {/* Name only skeleton */}
+                        <div className="w-44 shrink-0">
+                          <div className="w-28 h-4 bg-slate-200/80 rounded-md" />
+                        </div>
+                        {/* Status badge skeleton */}
+                        <div className="w-16 h-5 bg-slate-200/50 rounded-full shrink-0" />
+                        {/* Subject & snippet skeleton */}
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="w-40 h-3.5 bg-slate-200/70 rounded-md shrink-0" />
+                          <div className="w-64 h-3 bg-slate-200/40 rounded-md truncate" />
+                        </div>
                       </div>
-                      <div className="w-4 h-4 bg-slate-200/70 rounded-full" />
+                      <div className="flex items-center gap-3 pl-6 pr-6 shrink-0">
+                        <div className="w-4 h-4 bg-slate-200/40 rounded-md" />
+                        <div className="w-14 h-3.5 bg-slate-200/50 rounded-md shrink-0 ml-1" />
+                      </div>
                     </div>
                   ))}
                 </div>
-              ) : filteredEmails.length === 0 ? (
+              );
+            }
+
+            if (filteredEmails.length === 0) {
+              return (
                 <div className="flex flex-col items-center justify-center p-16 text-center space-y-5 select-none">
                   {searchQuery.trim() ? (
                     /* No search results state */
@@ -1260,8 +1863,8 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {/* Title and description — only shown when no active search */}
-                  {!searchQuery.trim() && (
+                  {/* Title and description — only shown when no active search and no active status filter */}
+                  {!searchQuery.trim() && statusFilter === 'ALL' && (
                     <>
                       <h4
                         style={{
@@ -1271,7 +1874,15 @@ export default function DashboardPage() {
                         }}
                         className="font-semibold text-slate-800"
                       >
-                        {activeTab === 'scheduled' ? 'No scheduled emails' : 'Mailbox is empty'}
+                        {activeTab === 'scheduled'
+                          ? 'No scheduled emails'
+                          : activeTab === 'sent'
+                          ? 'No sent emails'
+                          : activeTab === 'favorites'
+                          ? 'No favorite emails'
+                          : activeTab === 'archive'
+                          ? 'Archive is empty'
+                          : 'Mailbox is empty'}
                       </h4>
                       <p
                         style={{
@@ -1282,61 +1893,157 @@ export default function DashboardPage() {
                         className="text-slate-400 max-w-xs leading-relaxed"
                       >
                         {activeTab === 'scheduled'
-                          ? 'No queued messages waiting to be dispatched. Hit Compose to schedule a new campaign.'
+                          ? 'No queued messages waiting to be dispatched. Hit Compose to schedule a new email.'
+                          : activeTab === 'sent'
+                          ? 'No sent emails yet. Any emails delivered or sent will appear right here.'
+                          : activeTab === 'favorites'
+                          ? 'Star any email from your list or detail view to access it quickly here.'
+                          : activeTab === 'archive'
+                          ? 'Archived emails will be stored here safely away from your main inbox.'
                           : 'Nothing here yet — sent emails will show up once your campaigns start delivering.'}
                       </p>
                     </>
                   )}
                 </div>
-              ) : (
-                filteredEmails.map((email) => (
-                  <div
-                    key={email.id}
-                    onClick={() => {
-                      setSelectedEmail(email);
-                      setShowRecipientDetails(false);
-                      setViewMode('detail');
-                    }}
-                    className="flex items-center justify-between px-10 py-4 hover:bg-[#F9FBFA] transition cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-8 min-w-0 flex-1">
-                      {/* Recipient Name formatted (e.g. "To: John Smith" or "To: Olive") */}
-                      <span
-                        style={{
-                          fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                          fontSize: '14px',
-                          letterSpacing: '-0.15px',
-                        }}
-                        className="font-semibold text-slate-900 w-44 shrink-0 truncate"
-                      >
-                        To: {formatRecipientName(email.recipient)}
-                      </span>
+              );
+            }
 
-                      {/* Pill Badge matching Figma: Clock icon + Tue 9:15:12 AM */}
-                      {activeTab === 'scheduled' ? (
+            return (
+              <>
+                {/* Select All on Page bar (Shown only when at least one item is selected) */}
+                {selectedEmailIds.length > 0 && (
+                  <div className="flex items-center justify-between px-4 sm:px-6 md:px-10 py-1.5 text-xs text-slate-500 border-b border-slate-100 bg-[#FAFBFB] select-none animate-in fade-in duration-150">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleSelectAll(currentPageIds)}
+                        className="flex items-center gap-2 hover:text-slate-900 transition cursor-pointer"
+                        title={allCurrentSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                      >
                         <div
-                          style={{
-                            fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                            fontSize: '12px',
-                            letterSpacing: '-0.15px',
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF4E8] text-[#E06D1C] border border-[#FFD9B3] font-medium shrink-0"
+                          className={`w-4 h-4 rounded border flex items-center justify-center transition cursor-pointer ${
+                            allCurrentSelected
+                              ? 'bg-[#00A843] border-[#00A843] text-white'
+                              : someCurrentSelected
+                              ? 'bg-[#E5F5EB] border-[#00A843] text-[#00A843]'
+                              : 'border-slate-300 bg-white hover:border-slate-400'
+                          }`}
                         >
-                          <Clock className="w-3.5 h-3.5 text-[#E06D1C] stroke-[1.75]" />
-                          <span>{formatBadgeTime(email.scheduledAt)}</span>
+                          {allCurrentSelected && <Check className="w-3 h-3 stroke-[2.5]" />}
+                          {!allCurrentSelected && someCurrentSelected && (
+                            <span className="w-2 h-0.5 bg-[#00A843] rounded-xs" />
+                          )}
                         </div>
-                      ) : (
-                        <div
-                          style={{
-                            fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                            fontSize: '12px',
-                            letterSpacing: '-0.15px',
-                          }}
-                          className="inline-flex items-center px-3 py-1 rounded-full bg-[#F0F2F1] text-slate-600 font-medium shrink-0"
-                        >
-                          <span>Sent</span>
-                        </div>
-                      )}
+                        <span className="text-[12px] font-medium text-slate-600">
+                          {allCurrentSelected ? 'Deselect all on page' : `Select all ${pagedEmails.length} on page`}
+                        </span>
+                      </button>
+                    </div>
+
+                    <span className="text-[11px] text-slate-400">
+                      Page {safeCurrentPage} of {totalPages}
+                    </span>
+                  </div>
+                )}
+
+                  {pagedEmails.map((email) => {
+                    const isSelected = selectedEmailIds.includes(email.id);
+                    return (
+                      <div
+                        key={email.id}
+                        onClick={() => {
+                          setSelectedEmail(email);
+                          setShowRecipientDetails(false);
+                          setViewMode('detail');
+                        }}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-6 md:px-10 py-3.5 border-b border-slate-100/90 transition cursor-pointer group gap-2 sm:gap-4 ${
+                          isSelected ? 'bg-[#F0FAF4]' : 'hover:bg-[#F9FBFA] bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 sm:gap-4 md:gap-5 min-w-0 flex-1">
+                          {/* Gmail-style Checkbox: appears on hover or stays visible when checked */}
+                          <div
+                            onClick={(e) => toggleSelectEmail(email.id, e)}
+                            className="shrink-0 p-0.5 cursor-pointer"
+                            title={isSelected ? 'Deselect email' : 'Select email'}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded border flex items-center justify-center transition ${
+                                isSelected
+                                  ? 'bg-[#00A843] border-[#00A843] text-white opacity-100'
+                                  : 'border-slate-300 bg-white hover:border-slate-400 opacity-0 group-hover:opacity-100'
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3 h-3 stroke-[2.5]" />}
+                            </div>
+                          </div>
+
+                          {/* Recipient Name only (email removed as requested) */}
+                          <span
+                            style={{
+                              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                              fontSize: '14px',
+                              letterSpacing: '-0.15px',
+                            }}
+                            className="font-semibold text-slate-900 w-28 sm:w-36 md:w-44 shrink-0 truncate"
+                            title={formatRecipientName(email.recipient)}
+                          >
+                            {formatRecipientName(email.recipient)}
+                          </span>
+
+                      {/* Status badge */}
+                      <div className="shrink-0">
+                        {email.status === 'FAILED' ? (
+                          <div
+                            style={{
+                              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                              fontSize: '11px',
+                              letterSpacing: '-0.1px',
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200 font-semibold"
+                            title={email.errorMessage || 'Failed to send'}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                            <span>Failed</span>
+                          </div>
+                        ) : email.status === 'SENT' ? (
+                          <div
+                            style={{
+                              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                              fontSize: '11px',
+                              letterSpacing: '-0.1px',
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E5F5EB] text-[#00A843] border border-[#C8E6C9] font-semibold"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#00A843]" />
+                            <span>Sent</span>
+                          </div>
+                        ) : email.status === 'QUEUED' || email.status === 'RATE_LIMITED' ? (
+                          <div
+                            style={{
+                              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                              fontSize: '11px',
+                              letterSpacing: '-0.1px',
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 font-semibold"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                            <span>Queued</span>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                              fontSize: '11px',
+                              letterSpacing: '-0.1px',
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            <span>Scheduled</span>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Subject and Body snippet */}
                       <div
@@ -1345,25 +2052,104 @@ export default function DashboardPage() {
                           fontSize: '14px',
                           letterSpacing: '-0.15px',
                         }}
-                        className="text-slate-800 truncate flex-1 flex items-center gap-2"
+                        className="text-slate-800 truncate flex-1 flex items-center gap-2 min-w-0"
                       >
-                        <span className="font-semibold text-slate-900 shrink-0">
+                        <span className="font-semibold text-slate-900 shrink-0 truncate max-w-[140px] sm:max-w-[200px] md:max-w-none">
                           {email.subject}
                         </span>
-                        <span className="text-slate-400 shrink-0">-</span>
-                        <span className="text-slate-400 font-normal truncate">
+                        <span className="text-slate-300 shrink-0 hidden sm:inline">-</span>
+                        <span className="text-slate-400 font-normal truncate hidden sm:inline">
                           {stripHtml(email.body) || 'No message content'}
                         </span>
                       </div>
                     </div>
 
-                    {/* Star icon at far right */}
-                    <div className="pl-6 pr-6">
-                      <Star className="w-4 h-4 text-slate-300 hover:text-amber-400 stroke-[1.5] transition" />
+                    {/* Action buttons and time at far right */}
+                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 self-end sm:self-auto w-full sm:w-auto pl-0 sm:pl-4 sm:pr-2 md:pl-6 md:pr-6">
+                      {/* Archive button */}
+                      <button
+                        type="button"
+                        onClick={(e) => toggleArchive(email.id, e)}
+                        className={`p-1.5 rounded-md hover:bg-slate-100 transition opacity-0 group-hover:opacity-100 ${
+                          archivedIds.includes(email.id) ? 'text-emerald-600 opacity-100' : 'text-slate-400 hover:text-slate-700'
+                        }`}
+                        title={archivedIds.includes(email.id) ? 'Unarchive' : 'Archive email'}
+                      >
+                        <Archive className="w-4 h-4 stroke-[1.75]" />
+                      </button>
+
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmailToDelete({
+                            id: email.id,
+                            subject: email.subject || 'Untitled Email',
+                            recipient: formatRecipientName(email.recipient),
+                          });
+                        }}
+                        className="p-1.5 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-600 transition opacity-0 group-hover:opacity-100"
+                        title="Delete email"
+                      >
+                        <Trash2 className="w-4 h-4 stroke-[1.75]" />
+                      </button>
+
+                      {/* Favorite / Star button — reveals when hovered (stays visible if already favorited) */}
+                      <button
+                        type="button"
+                        onClick={(e) => toggleFavorite(email.id, e)}
+                        className={`p-1 rounded-md transition ${
+                          favoriteIds.includes(email.id)
+                            ? 'opacity-100'
+                            : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                        title={favoriteIds.includes(email.id) ? 'Remove from favorites' : 'Add to favorites'}
+                      >
+                        <Star
+                          className={`w-4 h-4 transition ${
+                            favoriteIds.includes(email.id)
+                              ? 'text-amber-400 fill-amber-400'
+                              : 'text-slate-300 hover:text-amber-400 stroke-[1.5]'
+                          }`}
+                        />
+                      </button>
+
+                      {/* Time appearing at last after favorites icon */}
+                      <div className="text-right shrink-0 ml-1">
+                        {activeTab === 'scheduled' ? (
+                          <div
+                            style={{
+                              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                              fontSize: '12px',
+                              letterSpacing: '-0.15px',
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF4E8] text-[#E06D1C] border border-[#FFD9B3] font-medium"
+                            title={`Scheduled: ${new Date(email.scheduledAt).toLocaleString()}`}
+                          >
+                            <Clock className="w-3.5 h-3.5 text-[#E06D1C] stroke-[1.75]" />
+                            <span>{formatBadgeTime(email.scheduledAt)}</span>
+                          </div>
+                        ) : (
+                          <span
+                            style={{
+                              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                              fontSize: '12px',
+                              letterSpacing: '-0.1px',
+                            }}
+                            className="text-slate-400 font-medium whitespace-nowrap min-w-[65px] inline-block text-right"
+                            title={new Date(email.sentAt || email.scheduledAt).toLocaleString()}
+                          >
+                            {formatListTimestamp(email.sentAt || email.scheduledAt)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                ))
-              );
+                );
+              })}
+            </>
+          );
             })()}
             </div>
           </div>
@@ -1379,11 +2165,11 @@ export default function DashboardPage() {
             className="flex-1 flex flex-col h-full overflow-hidden bg-white"
           >
             {/* Detail Top Header */}
-            <div className="px-10 pt-7 pb-5 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="px-4 sm:px-8 md:px-10 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-slate-100 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                 <button
                   onClick={() => setViewMode('list')}
-                  className="p-1 hover:text-slate-900 text-slate-700 transition"
+                  className="p-1 hover:text-slate-900 text-slate-700 transition shrink-0"
                   title="Back"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -1394,66 +2180,72 @@ export default function DashboardPage() {
                     fontSize: '17px',
                     letterSpacing: '-0.15px',
                   }}
-                  className="font-bold text-slate-900"
+                  className="font-bold text-slate-900 truncate"
                 >
                   {selectedEmail.subject}
                 </h2>
               </div>
 
-              <div className="flex items-center gap-4 text-slate-400">
-                <Star className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
-                <Archive className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
-                <Trash2 className="w-4 h-4 hover:text-slate-600 cursor-pointer" />
-                {currentUser.avatarUrl && !imageLoadFailed ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={currentUser.avatarUrl}
-                    alt={currentUser.name}
-                    referrerPolicy="no-referrer"
-                    onError={() => setImageLoadFailed(true)}
-                    className="w-8 h-8 rounded-full object-cover ml-2 shrink-0 border border-slate-200"
+              <div className="flex items-center gap-3 text-slate-400 shrink-0">
+                {/* Star / Favorite in Detail view */}
+                <button
+                  type="button"
+                  onClick={(e) => toggleFavorite(selectedEmail.id, e)}
+                  className="p-1 rounded-md transition"
+                  title={favoriteIds.includes(selectedEmail.id) ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <Star
+                    className={`w-4 h-4 transition ${
+                      favoriteIds.includes(selectedEmail.id)
+                        ? 'text-amber-400 fill-amber-400'
+                        : 'text-slate-400 hover:text-amber-400 stroke-[1.5]'
+                    }`}
                   />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-[11px] ml-2 shrink-0">
-                    {currentUser.name
-                      ? currentUser.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join('')
-                          .toUpperCase()
-                      : 'U'}
-                  </div>
-                )}
+                </button>
+
+                {/* Archive in Detail view */}
+                <button
+                  type="button"
+                  onClick={(e) => toggleArchive(selectedEmail.id, e)}
+                  className={`p-1 rounded-md transition ${
+                    archivedIds.includes(selectedEmail.id) ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-700'
+                  }`}
+                  title={archivedIds.includes(selectedEmail.id) ? 'Unarchive' : 'Archive email'}
+                >
+                  <Archive className="w-4 h-4 stroke-[1.75]" />
+                </button>
+
+                {/* Trash / Delete in Detail view */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailToDelete({
+                      id: selectedEmail.id,
+                      subject: selectedEmail.subject || 'Untitled Email',
+                      recipient: formatRecipientName(selectedEmail.recipient),
+                    });
+                  }}
+                  className="p-1 rounded-md text-slate-400 hover:text-red-600 transition"
+                  title="Delete email"
+                >
+                  <Trash2 className="w-4 h-4 stroke-[1.75]" />
+                </button>
               </div>
             </div>
 
             {/* Email Message Content */}
-            <div className="flex-1 p-8 max-w-4xl overflow-y-auto space-y-6">
+            <div className="flex-1 p-4 sm:p-6 md:p-8 max-w-4xl overflow-y-auto space-y-6">
               {/* Sender & Recipient header matching Gmail / modern email client style */}
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-3.5">
-                  {/* User Avatar */}
-                  {currentUser.avatarUrl && !imageLoadFailed ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={currentUser.avatarUrl}
-                      alt={currentUser.name || 'User'}
-                      referrerPolicy="no-referrer"
-                      onError={() => setImageLoadFailed(true)}
-                      className="w-10 h-10 rounded-full object-cover shrink-0 border border-slate-200"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-[#00A843] text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
-                      {currentUser.name
-                        ? currentUser.name.charAt(0).toUpperCase()
-                        : 'O'}
-                    </div>
-                  )}
+                  {/* Recipient Avatar */}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#00A843] to-emerald-400 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
+                    {formatRecipientName(selectedEmail.recipient).charAt(0).toUpperCase()}
+                  </div>
 
-                  {/* Sender details and Expandable 'to me / to [Recipient Name]' row */}
+                  {/* Recipient details and Expandable 'from me' row */}
                   <div className="space-y-0.5">
-                    {/* First line: Name and <email> */}
+                    {/* First line: Recipient name and <recipient email> */}
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span
                         style={{
@@ -1463,7 +2255,7 @@ export default function DashboardPage() {
                         }}
                         className="font-bold text-slate-900"
                       >
-                        {currentUser.name || 'Oliver Brown'}
+                        {formatRecipientName(selectedEmail.recipient)}
                       </span>
                       <span
                         style={{
@@ -1473,18 +2265,18 @@ export default function DashboardPage() {
                         }}
                         className="text-slate-500 font-normal"
                       >
-                        &lt;{selectedEmail.sender?.email || currentUser.email || 'oliver.brown@domain.io'}&gt;
+                        &lt;{selectedEmail.recipient}&gt;
                       </span>
                     </div>
 
-                    {/* Second line: 'to [Recipient Name]' with expand arrow */}
+                    {/* Second line: 'from me' with expand arrow */}
                     <div className="relative">
                       <button
                         type="button"
                         onClick={() => setShowRecipientDetails(!showRecipientDetails)}
                         className="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-800 transition cursor-pointer py-0.5"
                       >
-                        <span>to {formatRecipientName(selectedEmail.recipient)}</span>
+                        <span>from me</span>
                         <ChevronDown
                           className={`w-3.5 h-3.5 transition-transform duration-200 ${
                             showRecipientDetails ? 'rotate-180' : ''
@@ -1492,7 +2284,7 @@ export default function DashboardPage() {
                         />
                       </button>
 
-                      {/* Expanded Recipient Details popover / card */}
+                      {/* Expanded Details popover / card */}
                       {showRecipientDetails && (
                         <>
                           <div
@@ -1566,48 +2358,106 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Message text with rich-preview styling */}
-              <div
-                style={{
-                  fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                  fontSize: '14px',
-                  letterSpacing: '-0.15px',
-                  lineHeight: '160%',
-                }}
-                className="text-slate-800 pt-1 space-y-4"
-              >
-                <div
-                  style={{
-                    fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                    fontSize: '14px',
-                    letterSpacing: '-0.15px',
-                    lineHeight: '160%',
-                  }}
-                  className="rich-preview text-slate-700 bg-[#F9FBFA] p-6 rounded-2xl border border-slate-100/80 shadow-[0_1px_4px_rgba(0,0,0,0.02)]"
-                  dangerouslySetInnerHTML={{
-                    __html: selectedEmail.body || 'No message content.',
-                  }}
-                />
+              {/* Message text and outside attachments */}
+              {(() => {
+                const { cleanBody, attachments: emailAttachments } = parseEmailContentAndAttachments(selectedEmail.body);
 
-                {selectedEmail.errorMessage?.includes('Preview:') && (
-                  <div className="pt-2">
-                    <a
-                      href={selectedEmail.errorMessage.replace('Preview: ', '')}
-                      target="_blank"
-                      rel="noreferrer"
+                return (
+                  <div
+                    style={{
+                      fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                      fontSize: '14px',
+                      letterSpacing: '-0.15px',
+                      lineHeight: '160%',
+                    }}
+                    className="text-slate-800 pt-1 space-y-5"
+                  >
+                    {/* Clean formatted text message box */}
+                    <div
                       style={{
                         fontFamily: "var(--font-inter), 'Inter', sans-serif",
-                        fontSize: '13px',
+                        fontSize: '14px',
                         letterSpacing: '-0.15px',
+                        lineHeight: '160%',
                       }}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-50 text-[#00A843] font-semibold border border-emerald-100 hover:bg-emerald-100/70 transition"
-                    >
-                      <span>Open Delivered Email in Ethereal Sandbox</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                      className="rich-preview text-slate-700 bg-[#F9FBFA] p-6 rounded-2xl border border-slate-100/80 shadow-[0_1px_4px_rgba(0,0,0,0.02)]"
+                      dangerouslySetInnerHTML={{
+                        __html: cleanBody || 'No message content.',
+                      }}
+                    />
+
+                    {/* Outside Attachment Card(s) - Matching user reference image */}
+                    {emailAttachments.length > 0 && (
+                      <div className="pt-2">
+                        <div className="flex flex-wrap gap-4">
+                          {emailAttachments.map((att) => (
+                            <div
+                              key={att.id}
+                              style={{
+                                fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                                letterSpacing: '-0.15px',
+                              }}
+                              className="w-56 bg-[#F8FAF9] rounded-2xl overflow-hidden border border-slate-100/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)] flex flex-col hover:shadow-md transition"
+                            >
+                              {/* Thumbnail preview */}
+                              <div className="w-full h-36 bg-slate-100 overflow-hidden relative">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={att.url}
+                                  alt={att.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+
+                              {/* Card footer details with filename & file size */}
+                              <div className="p-3.5 flex flex-col justify-center">
+                                <p
+                                  style={{
+                                    fontSize: '15px',
+                                    letterSpacing: '-0.2px',
+                                  }}
+                                  className="font-semibold text-[#1E293B] truncate leading-tight"
+                                  title={att.name}
+                                >
+                                  {att.name}
+                                </p>
+                                <p
+                                  style={{
+                                    fontSize: '13px',
+                                    letterSpacing: '-0.15px',
+                                  }}
+                                  className="text-[#64748B] font-normal mt-1 leading-none"
+                                >
+                                  {att.size}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedEmail.errorMessage?.includes('Preview:') && (
+                      <div className="pt-2">
+                        <a
+                          href={selectedEmail.errorMessage.replace('Preview: ', '')}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                            fontSize: '13px',
+                            letterSpacing: '-0.15px',
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-50 text-[#00A843] font-semibold border border-emerald-100 hover:bg-emerald-100/70 transition"
+                        >
+                          <span>Open Delivered Email in Ethereal Sandbox</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1622,11 +2472,11 @@ export default function DashboardPage() {
             className="flex-1 flex flex-col h-full overflow-y-auto relative bg-white"
           >
             {/* Header: Compose New Email + Action icons + Green "Send Later" button */}
-            <div className="px-10 pt-7 pb-5 flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="px-4 sm:px-8 md:px-10 pt-5 sm:pt-7 pb-4 sm:pb-5 flex items-center justify-between gap-3 border-b sm:border-b-0 border-slate-100">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                 <button
                   onClick={() => setViewMode('list')}
-                  className="p-1 hover:text-slate-900 text-slate-700 transition"
+                  className="p-1 hover:text-slate-900 text-slate-700 transition shrink-0"
                   title="Back"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -1637,13 +2487,13 @@ export default function DashboardPage() {
                     fontSize: '17px',
                     letterSpacing: '-0.15px',
                   }}
-                  className="font-bold text-slate-900"
+                  className="font-bold text-slate-900 truncate"
                 >
                   Compose New Email
                 </h2>
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                 {/* Attachment button with dynamic count badge matching Figma reference */}
                 <div className="relative inline-flex items-center">
                   <button
@@ -1700,7 +2550,7 @@ export default function DashboardPage() {
                     letterSpacing: '-0.15px',
                     lineHeight: '100%',
                   }}
-                  className="px-5 py-2 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E8F5E9]/50 font-medium transition"
+                  className="px-4 sm:px-5 py-2 rounded-full border border-[#00A843] text-[#00A843] hover:bg-[#E8F5E9]/50 font-medium transition cursor-pointer text-sm"
                 >
                   {submitting
                     ? scheduledDateStr
@@ -1719,7 +2569,7 @@ export default function DashboardPage() {
                 fontFamily: "var(--font-inter), 'Inter', sans-serif",
                 letterSpacing: '-0.15px',
               }}
-              className="px-10 py-4 max-w-4xl space-y-4"
+              className="px-4 sm:px-8 md:px-10 py-4 max-w-4xl space-y-4"
             >
               {/* From */}
               <div className="flex items-center gap-6">
@@ -1885,7 +2735,7 @@ export default function DashboardPage() {
                   letterSpacing: '-0.15px',
                   lineHeight: '100%',
                 }}
-                className="flex items-center gap-8 py-1 text-slate-600"
+                className="flex flex-wrap items-center gap-4 sm:gap-8 py-1 text-slate-600"
               >
                 <div className="flex items-center gap-3">
                   <span>Delay between 2 emails</span>
@@ -2324,7 +3174,7 @@ export default function DashboardPage() {
                     fontFamily: "var(--font-inter), 'Inter', sans-serif",
                     letterSpacing: '-0.15px',
                   }}
-                  className="absolute top-16 right-8 w-80 bg-white rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.14)] border border-slate-100 z-30 overflow-hidden"
+                  className="fixed inset-x-4 top-20 sm:absolute sm:top-16 sm:right-8 sm:inset-x-auto w-auto sm:w-80 max-w-[340px] mx-auto sm:mx-0 bg-white rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.14)] border border-slate-100 z-50 overflow-hidden"
                 >
                   {/* Header */}
                   <div className="px-5 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between">
@@ -2585,6 +3435,198 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      {/* 3. Apple-Style Floating Mobile Navbar (md:hidden) */}
+      <nav
+        aria-label="Mobile Floating Navigation"
+        style={{
+          fontFamily: "var(--font-inter), 'Inter', sans-serif",
+          letterSpacing: '-0.15px',
+        }}
+        className="fixed bottom-5 inset-x-0 mx-auto w-[calc(100%-2rem)] max-w-xs z-40 md:hidden bg-white/85 backdrop-blur-xl border border-slate-200/80 shadow-[0_12px_36px_rgba(0,0,0,0.16)] rounded-full px-3 py-2 flex items-center justify-around transition-all animate-in fade-in slide-in-from-bottom-4 duration-200"
+      >
+        {/* Sent Tab Button */}
+        <button
+          type="button"
+          onClick={() => handleTabSwitch('sent')}
+          className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-2xl transition cursor-pointer ${
+            activeTab === 'sent' && viewMode === 'list'
+              ? 'text-[#00A843] font-semibold'
+              : 'text-slate-500 hover:text-slate-900 font-normal'
+          }`}
+        >
+          <div className="relative">
+            <Send className={`w-5 h-5 ${activeTab === 'sent' && viewMode === 'list' ? 'stroke-[2.2]' : 'stroke-[1.75]'}`} />
+            {sentCount > 0 && (
+              <span className="absolute -top-1 -right-2 min-w-[14px] h-3.5 px-1 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold flex items-center justify-center">
+                {sentCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] tracking-tight">Sent</span>
+        </button>
+
+        {/* Compose + Floating Action Button (Apple Hero Center Button) */}
+        <button
+          type="button"
+          onClick={() => {
+            setViewMode('compose');
+            setSelectedEmail(null);
+            setRecipientTags([]);
+            setNewRecipientInput('');
+            setComposeSubject('');
+            setComposeBody('');
+            if (editorRef.current) {
+              editorRef.current.innerHTML = '';
+            }
+            setScheduledDateStr('');
+            setShowSendLater(false);
+            setAttachments([]);
+            setMobileSidebarOpen(false);
+          }}
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition shadow-md active:scale-90 cursor-pointer ${
+            viewMode === 'compose'
+              ? 'bg-[#00A843] text-white ring-4 ring-emerald-100'
+              : 'bg-[#00A843] hover:bg-[#008f39] text-white shadow-[#00A843]/30'
+          }`}
+          title="Compose New Email"
+        >
+          <Plus className="w-6 h-6 stroke-[2.5]" />
+        </button>
+
+        {/* Scheduled Tab Button */}
+        <button
+          type="button"
+          onClick={() => handleTabSwitch('scheduled')}
+          className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-2xl transition cursor-pointer ${
+            activeTab === 'scheduled' && viewMode === 'list'
+              ? 'text-[#00A843] font-semibold'
+              : 'text-slate-500 hover:text-slate-900 font-normal'
+          }`}
+        >
+          <div className="relative">
+            <Clock className={`w-5 h-5 ${activeTab === 'scheduled' && viewMode === 'list' ? 'stroke-[2.2]' : 'stroke-[1.75]'}`} />
+            {scheduledCount > 0 && (
+              <span className="absolute -top-1 -right-2 min-w-[14px] h-3.5 px-1 rounded-full bg-[#FFF4E8] text-[#E06D1C] text-[9px] font-bold flex items-center justify-center border border-[#FFD9B3]/60">
+                {scheduledCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] tracking-tight">Scheduled</span>
+        </button>
+      </nav>
+
+      {/* Sleek In-App Delete Confirmation Modal */}
+      {emailToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div
+            style={{
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              letterSpacing: '-0.15px',
+            }}
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all scale-100 p-6 space-y-5"
+          >
+            {/* Header: Icon + Title */}
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100">
+                <Trash2 className="w-5 h-5 stroke-[2]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900 leading-snug">
+                  Delete this email?
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  This email will be permanently removed from your queue and database. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {/* Email info preview box */}
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1 text-xs">
+              <p className="text-slate-800 font-semibold truncate">
+                {emailToDelete.subject}
+              </p>
+              <p className="text-slate-500 truncate">
+                Recipient: <span className="font-medium text-slate-700">{emailToDelete.recipient}</span>
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setEmailToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteEmail(emailToDelete.id);
+                  setEmailToDelete(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-700 active:scale-95 shadow-sm transition cursor-pointer"
+              >
+                Delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sleek Bulk Delete Confirmation Modal */}
+      {bulkDeleteModalOpen && selectedEmailIds.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div
+            style={{
+              fontFamily: "var(--font-inter), 'Inter', sans-serif",
+              letterSpacing: '-0.15px',
+            }}
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all scale-100 p-6 space-y-5"
+          >
+            {/* Header: Icon + Title */}
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100">
+                <Trash2 className="w-5 h-5 stroke-[2]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900 leading-snug">
+                  Delete {selectedEmailIds.length} {selectedEmailIds.length === 1 ? 'email' : 'emails'}?
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  The selected {selectedEmailIds.length === 1 ? 'email' : 'emails'} will be permanently removed from your queue and database. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {/* Selection info preview box */}
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1 text-xs">
+              <p className="text-slate-700 font-medium">
+                {selectedEmailIds.length} {selectedEmailIds.length === 1 ? 'item' : 'items'} selected across this view.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setBulkDeleteModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-700 active:scale-95 shadow-sm transition cursor-pointer"
+              >
+                Delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
