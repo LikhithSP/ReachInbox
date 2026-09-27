@@ -66,6 +66,7 @@ export function startEmailWorker() {
 
           // Notify Slack (RI-051)
           await SlackService.notifyRateLimit(
+            emailJob.campaign.userId,
             emailJob.sender.email,
             rateLimitResult.currentCount,
             hourlyLimit,

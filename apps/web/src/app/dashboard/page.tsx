@@ -47,7 +47,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Square,
+  MessageSquare,
 } from 'lucide-react';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 interface EmailItem {
   id: string;
@@ -94,6 +97,15 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
+  // Slack Integration State
+  const [showSlackModal, setShowSlackModal] = useState(false);
+  const [slackConnected, setSlackConnected] = useState(false);
+  const [slackTeamName, setSlackTeamName] = useState<string | null>(null);
+  const [slackChannelName, setSlackChannelName] = useState<string | null>(null);
+  const [slackWebhookInput, setSlackWebhookInput] = useState('');
+  const [slackLoading, setSlackLoading] = useState(false);
+  const [slackStatusMessage, setSlackStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Favorites & Archives set
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [archivedIds, setArchivedIds] = useState<string[]>([]);
@@ -106,15 +118,121 @@ export default function DashboardPage() {
     } catch {}
   }, []);
 
-  // Load favorites & archived from localStorage on mount
-  useEffect(() => {
+  // Load Slack connection status
+  const loadSlackStatus = async () => {
     try {
-      const savedFavs = localStorage.getItem('reachinbox_favorites');
-      if (savedFavs) setFavoriteIds(JSON.parse(savedFavs));
-      const savedArch = localStorage.getItem('reachinbox_archived');
-      if (savedArch) setArchivedIds(JSON.parse(savedArch));
-    } catch {}
-  }, []);
+      const res = await fetch(`${API_BASE_URL}/api/v1/integrations/slack`, {
+        credentials: 'include',
+        headers: {
+          'x-dev-user-id': currentUser.id,
+          'x-dev-user-email': currentUser.email,
+        },
+      });
+      const data = await res.json();
+      if (data && data.connected) {
+        setSlackConnected(true);
+        setSlackTeamName(data.teamName);
+        setSlackChannelName(data.channelName);
+      } else {
+        setSlackConnected(false);
+        setSlackTeamName(null);
+        setSlackChannelName(null);
+      }
+    } catch (err) {
+      console.warn('Notice checking Slack status:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadSlackStatus();
+  }, [currentUser.id]);
+
+  const handleConnectSlackOAuth = () => {
+    window.location.href = `${API_BASE_URL}/api/v1/integrations/slack/connect`;
+  };
+
+  const handleSaveSlackWebhook = async () => {
+    if (!slackWebhookInput.trim()) return;
+    setSlackLoading(true);
+    setSlackStatusMessage(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/integrations/slack/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-dev-user-id': currentUser.id,
+          'x-dev-user-email': currentUser.email,
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          webhookUrl: slackWebhookInput.trim(),
+          teamName: 'Connected Slack',
+          channelName: '#email-alerts',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSlackConnected(true);
+        setSlackTeamName('Connected Slack');
+        setSlackChannelName('#email-alerts');
+        setSlackStatusMessage({ type: 'success', text: 'Slack successfully connected! Test notification sent.' });
+        setSlackWebhookInput('');
+      } else {
+        setSlackStatusMessage({ type: 'error', text: data.message || 'Failed to save webhook' });
+      }
+    } catch (err: any) {
+      setSlackStatusMessage({ type: 'error', text: err.message || 'Network error' });
+    } finally {
+      setSlackLoading(false);
+    }
+  };
+
+  const handleSendSlackTest = async () => {
+    setSlackLoading(true);
+    setSlackStatusMessage(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/integrations/slack/test`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'x-dev-user-id': currentUser.id,
+          'x-dev-user-email': currentUser.email,
+        },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSlackStatusMessage({ type: 'success', text: 'Live test alert sent to your Slack channel!' });
+      } else {
+        setSlackStatusMessage({ type: 'error', text: data.message || 'Failed to send test alert' });
+      }
+    } catch (err: any) {
+      setSlackStatusMessage({ type: 'error', text: err.message || 'Network error' });
+    } finally {
+      setSlackLoading(false);
+    }
+  };
+
+  const handleDisconnectSlack = async () => {
+    setSlackLoading(true);
+    try {
+      await fetch(`${API_BASE_URL}/api/v1/integrations/slack`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'x-dev-user-id': currentUser.id,
+          'x-dev-user-email': currentUser.email,
+        },
+      });
+      setSlackConnected(false);
+      setSlackTeamName(null);
+      setSlackChannelName(null);
+      setSlackStatusMessage({ type: 'success', text: 'Slack disconnected.' });
+    } catch (err: any) {
+      setSlackStatusMessage({ type: 'error', text: err.message || 'Error disconnecting' });
+    } finally {
+      setSlackLoading(false);
+    }
+  };
 
   const toggleFavorite = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -1245,6 +1363,37 @@ export default function DashboardPage() {
             </span>
           </button>
 
+          {/* Slack Alerts Connection Button */}
+          <div className="pt-2">
+            <button
+              onClick={() => {
+                setShowSlackModal(true);
+                loadSlackStatus();
+              }}
+              style={{
+                width: '236px',
+                height: '36px',
+                borderRadius: '12px',
+                paddingRight: '16px',
+                paddingLeft: '16px',
+                fontFamily: "var(--font-inter), 'Inter', sans-serif",
+                fontSize: '14px',
+                lineHeight: '100%',
+                letterSpacing: '-0.15px',
+              }}
+              className="flex items-center justify-between text-slate-600 hover:bg-slate-50 font-normal transition cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <MessageSquare className="w-4 h-4 text-[#4A154B] stroke-[1.75]" />
+                <span className="font-normal text-slate-800">Slack Alerts</span>
+              </div>
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                slackConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {slackConnected ? 'Connected' : 'Setup'}
+              </span>
+            </button>
+          </div>
 
         </div>
 
@@ -3622,6 +3771,124 @@ export default function DashboardPage() {
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-700 active:scale-95 shadow-sm transition cursor-pointer"
               >
                 Delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SLACK INTEGRATION MODAL */}
+      {showSlackModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 relative border border-slate-100 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#4A154B]/10 flex items-center justify-center text-[#4A154B]">
+                  <MessageSquare className="w-5 h-5 stroke-[2]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Slack Alerts Integration</h3>
+                  <p className="text-xs text-slate-500">Live notifications when hourly email limits are reached</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSlackModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Status Banner */}
+            <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
+              slackConnected ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${slackConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                <div>
+                  <p className="text-xs font-semibold text-slate-800">
+                    {slackConnected ? `Connected to ${slackTeamName || 'Slack'}` : 'Slack Not Connected'}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {slackConnected ? `Alerts posted to ${slackChannelName || '#alerts'}` : 'Rate limits will not notify until connected'}
+                  </p>
+                </div>
+              </div>
+
+              {slackConnected && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSendSlackTest}
+                    disabled={slackLoading}
+                    className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                  >
+                    Send Test
+                  </button>
+                  <button
+                    onClick={handleDisconnectSlack}
+                    disabled={slackLoading}
+                    className="px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition cursor-pointer"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Notification message feedback */}
+            {slackStatusMessage && (
+              <div className={`p-3 rounded-xl text-xs font-medium ${
+                slackStatusMessage.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : 'bg-red-50 text-red-800 border border-red-200'
+              }`}>
+                {slackStatusMessage.text}
+              </div>
+            )}
+
+            {/* Method 1: Instant Webhook URL Setup (Recommended for Demo / Quick Verification) */}
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <label className="block text-xs font-bold text-slate-700">
+                Option 1: Paste Incoming Webhook URL
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Paste any Slack webhook URL (e.g. from Slack App &gt; Incoming Webhooks). Alerts will fire live immediately!
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="https://hooks.slack.com/services/T.../B.../..."
+                  value={slackWebhookInput}
+                  onChange={(e) => setSlackWebhookInput(e.target.value)}
+                  className="flex-1 text-xs px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#00A843]"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveSlackWebhook}
+                  disabled={slackLoading || !slackWebhookInput.trim()}
+                  className="px-4 py-2 bg-[#00A843] hover:bg-[#00923a] text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  Save &amp; Test
+                </button>
+              </div>
+            </div>
+
+            {/* Method 2: OAuth Connect Flow */}
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <label className="block text-xs font-bold text-slate-700">
+                Option 2: Connect via Slack OAuth Flow
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Authorize ReachInbox directly against your Slack workspace using standard OAuth 2.0.
+              </p>
+              <button
+                type="button"
+                onClick={handleConnectSlackOAuth}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#4A154B] hover:bg-[#3d113e] text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs active:scale-[0.99]"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Connect with Slack</span>
               </button>
             </div>
           </div>

@@ -6,6 +6,7 @@ import authRouter from './routes/auth';
 import campaignsRouter from './routes/campaigns';
 import emailsRouter from './routes/emails';
 import sendersRouter from './routes/senders';
+import slackRouter from './routes/slack';
 import { requestIdMiddleware, errorHandlerMiddleware } from './middleware/errorHandler';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
@@ -86,6 +87,7 @@ app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/campaigns', campaignsRouter);
 app.use('/api/v1/emails', emailsRouter);
 app.use('/api/v1/senders', sendersRouter);
+app.use('/api/v1/integrations/slack', slackRouter);
 
 app.use(errorHandlerMiddleware);
 
