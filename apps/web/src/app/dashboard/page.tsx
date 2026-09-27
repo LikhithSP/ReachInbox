@@ -202,6 +202,7 @@ export default function DashboardPage() {
       const data = await res.json();
       if (data.success) {
         setSlackStatusMessage({ type: 'success', text: 'Live test alert sent to your Slack channel!' });
+        setTimeout(() => setSlackStatusMessage(null), 4000);
       } else {
         setSlackStatusMessage({ type: 'error', text: data.message || 'Failed to send test alert' });
       }
@@ -1367,6 +1368,7 @@ export default function DashboardPage() {
           <div className="pt-2">
             <button
               onClick={() => {
+                setSlackStatusMessage(null);
                 setShowSlackModal(true);
                 loadSlackStatus();
               }}
@@ -3800,7 +3802,10 @@ export default function DashboardPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowSlackModal(false)}
+                onClick={() => {
+                  setSlackStatusMessage(null);
+                  setShowSlackModal(false);
+                }}
                 className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
               >
                 <X className="w-4 h-4" />
