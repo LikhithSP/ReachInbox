@@ -19,21 +19,22 @@ Designed around **persistent asynchronous job processing**, ensuring scheduled e
 ---
 
 ## Product Previews
+### Login Page
+![Login Screen Preview](previews/Login.png)
 
-### Dashboard & Scheduled List View
+### Dashboard
 ![Dashboard Preview](previews/Dashboard.png)
 
-### Campaign & Email Composer (with CSV Leads & Preview)
+### Email Composer
 ![Compose Email Preview](previews/Compose%20Email.png)
 
-### Real-Time Slack Rate-Limit Alerts Integration
+### Slack Rate-Limit Alerts
 ![Slack Notification Preview](previews/Slack%20Notification.png)
 
-### Custom BullMQ Observability Dashboard (`/admin/queues`)
+### BullMQ Observability Dashboard
 ![BullMQ Dashboard Preview](previews/BullMQ%20Dashboard.png)
 
-### Authentication & Registered User Login
-![Login Screen Preview](previews/Login.png)
+
 
 ---
 
