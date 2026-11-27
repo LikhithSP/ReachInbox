@@ -299,11 +299,21 @@ npm run dev:web
 
 ## Running the Automated Test Suite
 
-To run the automated Jest testing suite covering the campaign APIs, validation, concurrency, and scheduling logic:
+To run the automated Jest testing suite covering the campaign APIs, validation, rate limiting, and scheduling logic:
 
 ```bash
 npm test
 ```
+
+## Running Load Benchmarks
+
+To run the 1,000-job load benchmark (automatically uses live MySQL + Redis + BullMQ if running, or falls back to simulated in-memory mode):
+
+```bash
+npm run benchmark
+```
+
+See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for CLI options and recorded benchmark results.
 
 ---
 

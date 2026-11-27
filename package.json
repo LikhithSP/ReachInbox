@@ -16,6 +16,7 @@
     "build:shared": "npm run build --workspace=@reachinbox/shared",
     "build": "npm run build:shared && npm run build:api && npm run build:web",
     "test": "npm run test --workspaces --if-present",
+    "benchmark": "npm run build:shared && npm run benchmark --workspace=@reachinbox/api",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:generate": "npx prisma generate",
